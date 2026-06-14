@@ -361,8 +361,13 @@
 <button type="button" class="icon-btn" onclick="toggleEmojiPicker()" title="Emoji">
 <i class="fa-regular fa-face-smile"></i>
 </button>
+<input id="chatInput" type="text" placeholder="Login or signup to chat" />
+<button id="calculatorPreview" class="calculator-preview hidden" type="button" onclick="sendCalculationResult()" title="Send calculation"></button>
 <button type="button" class="icon-btn attachment-menu-btn" onclick="toggleAttachmentMenu()" title="Attach">
 <i class="fa-solid fa-paperclip"></i>
+</button>
+<button type="button" class="icon-btn chat-camera-btn" onclick="chooseAttachment('gallery')" title="Photos and videos">
+<i class="fa-solid fa-camera"></i>
 </button>
 <div id="attachmentMenu" class="attachment-menu hidden">
 <button type="button" onclick="chooseAttachment('document')"><i class="fa-solid fa-file-lines"></i><span>Documents</span></button>
@@ -374,8 +379,6 @@
 <button type="button" onclick="chooseAttachment('quickReply')"><i class="fa-solid fa-reply"></i><span>Quick reply</span></button>
 <button type="button" onclick="chooseAttachment('gallery')"><i class="fa-solid fa-images"></i><span>Gallery</span></button>
 </div>
-<input id="chatInput" type="text" placeholder="Login or signup to chat" />
-<button id="calculatorPreview" class="calculator-preview hidden" type="button" onclick="sendCalculationResult()" title="Send calculation"></button>
 <button id="sendButton" class="chat-send-btn" onclick="sendChat()" title="Send message" disabled>
 <i class="fa-solid fa-paper-plane"></i>
 </button>

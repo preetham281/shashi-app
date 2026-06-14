@@ -9,6 +9,7 @@
   --line:#edf2f7;
   --shadow:0 10px 30px rgba(15,23,42,0.10);
   --radius:14px;
+  --chat-keyboard-offset:0px;
 }
 
 *{
@@ -36,6 +37,12 @@ body{
 
 body.conversation-mode .app{
   display:block;
+}
+
+body.conversation-mode{
+  height:100vh;
+  height:100dvh;
+  overflow:hidden;
 }
 
 body.user-account-mode .app{
@@ -79,6 +86,7 @@ body.calls-mode .main,
 body.conversation-mode .main{
   padding:0;
   min-height:100vh;
+  min-height:100dvh;
 }
 
 body.profile-mode #profilePage,
@@ -88,6 +96,8 @@ body.settings-mode #settingsPage,
 body.calls-mode #callsPage,
 body.conversation-mode #conversationPage{
   min-height:100vh;
+  min-height:100dvh;
+  overflow:hidden;
 }
 
 body.user-account-mode .user-account-card{
@@ -1190,7 +1200,9 @@ body.full-page-mode .page-section > .reels-page-shell{
 
 body.conversation-mode .full-chat-card{
   min-height:100vh;
+  min-height:100dvh;
   height:100vh;
+  height:100dvh;
   border-radius:0;
   box-shadow:none;
   border:none;
@@ -2255,11 +2267,12 @@ body.profile-mode #profilePage > .profile-grid > .card:first-child{
     radial-gradient(circle at 18px 18px, rgba(37,99,235,0.045) 1.5px, transparent 1.5px),
     #ffffff;
   background-size:36px 36px;
+  padding-bottom:0;
 }
 
 .conversation-emoji-art{
   position:absolute;
-  inset:0 0 62px;
+  inset:0 0 88px;
   overflow:hidden;
   pointer-events:none;
   z-index:0;
@@ -2294,7 +2307,7 @@ body.profile-mode #profilePage > .profile-grid > .card:first-child{
   position:relative;
   z-index:2;
   min-height:0;
-  padding:48px 16px 18px;
+  padding:48px 16px 104px;
   background:transparent;
   scrollbar-width:thin;
   scrollbar-color:#cbd5e1 transparent;
@@ -2460,20 +2473,23 @@ body.profile-mode #profilePage > .profile-grid > .card:first-child{
 
 .message-input{
   display:flex;
-  gap:8px;
+  gap:10px;
   margin-top:0;
   align-items:center;
   position:relative;
 }
 
 .conversation-body .message-input{
-  position:relative;
-  z-index:4;
+  position:fixed;
+  left:12px;
+  right:12px;
+  bottom:calc(var(--chat-keyboard-offset, 0px) + env(safe-area-inset-bottom, 0px) + 10px);
+  z-index:80;
   flex:0 0 auto;
-  padding:10px;
+  padding:0;
   border-top:none;
-  background:rgba(255,255,255,0.96);
-  box-shadow:0 -8px 24px rgba(15,23,42,0.06);
+  background:transparent;
+  box-shadow:none;
 }
 
 .message-input input{
@@ -2482,16 +2498,22 @@ body.profile-mode #profilePage > .profile-grid > .card:first-child{
 
 .conversation-body .message-input input{
   min-width:0;
-  border-color:#dbe4ea;
-  border-radius:22px;
-  padding:12px 16px;
-  background:#f8fafc;
+  height:56px;
+  border:1px solid #d8dee8;
+  border-left:none;
+  border-right:none;
+  border-radius:0;
+  padding:0 12px;
+  background:#ffffff;
+  color:var(--text);
+  font-size:18px;
+  box-shadow:0 7px 20px rgba(15,23,42,0.08);
 }
 
 .attachment-menu{
   position:absolute;
-  left:56px;
-  bottom:62px;
+  left:58px;
+  bottom:70px;
   width:min(310px,86vw);
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
@@ -2533,24 +2555,46 @@ body.profile-mode #profilePage > .profile-grid > .card:first-child{
 }
 
 .conversation-body .icon-btn{
-  width:40px;
-  height:40px;
-  flex:0 0 40px;
-  border-radius:50%;
+  width:52px;
+  height:56px;
+  flex:0 0 52px;
+  border:1px solid #d8dee8;
+  border-radius:0;
   background:#ffffff;
-  color:var(--secondary);
+  color:#64748b;
+  box-shadow:0 7px 20px rgba(15,23,42,0.08);
+}
+
+.conversation-body .message-input .icon-btn:first-of-type{
+  border-right:none;
+  border-radius:28px 0 0 28px;
+  font-size:22px;
+}
+
+.conversation-body .message-input .attachment-menu-btn{
+  border-left:none;
+  border-right:none;
+  border-radius:0;
+  font-size:21px;
+}
+
+.conversation-body .message-input .chat-camera-btn{
+  border-left:none;
+  border-radius:0 28px 28px 0;
+  font-size:21px;
 }
 
 .chat-send-btn{
-  width:42px;
-  height:42px;
-  flex:0 0 42px;
+  width:58px;
+  height:58px;
+  flex:0 0 58px;
   border:none;
   border-radius:50%;
-  background:var(--secondary);
+  background:#111827;
   color:#ffffff;
-  font-size:16px;
+  font-size:20px;
   cursor:pointer;
+  box-shadow:0 8px 18px rgba(15,23,42,0.22);
 }
 
 .chat-send-btn:disabled{
@@ -2568,27 +2612,38 @@ body.profile-mode #profilePage > .profile-grid > .card:first-child{
 
 @media(max-width:600px){
   body.conversation-mode .full-chat-card{
-    padding:8px;
+    padding:0;
+  }
+  body.conversation-mode .chat-person-header{
+    margin:8px;
+  }
+  .conversation-body{
+    padding-bottom:0;
   }
   .conversation-body .chat-messages{
-    padding:44px 10px 14px;
+    padding:44px 10px 108px;
   }
   .conversation-body .message-input{
-    gap:5px;
-    padding:8px 6px;
+    left:10px;
+    right:10px;
+    bottom:calc(var(--chat-keyboard-offset, 0px) + env(safe-area-inset-bottom, 0px) + 8px);
+    gap:8px;
+    padding:0;
   }
   .conversation-body .icon-btn{
-    width:36px;
-    height:36px;
-    flex-basis:36px;
+    width:48px;
+    height:54px;
+    flex-basis:48px;
   }
   .conversation-body .message-input input{
-    padding:10px 12px;
+    height:54px;
+    padding:0 10px;
+    font-size:18px;
   }
   .chat-send-btn{
-    width:38px;
-    height:38px;
-    flex-basis:38px;
+    width:56px;
+    height:56px;
+    flex-basis:56px;
   }
   .message-selection-bar{
     gap:6px;

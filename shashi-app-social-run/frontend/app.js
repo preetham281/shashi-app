@@ -3826,6 +3826,31 @@ receiver: currentChatUser
 }
 });
 
+function updateChatKeyboardOffset(){
+let offset = 0;
+if(window.visualViewport){
+offset = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+}
+document.documentElement.style.setProperty('--chat-keyboard-offset', `${Math.round(offset)}px`);
+}
+
+if(window.visualViewport){
+window.visualViewport.addEventListener('resize', updateChatKeyboardOffset);
+window.visualViewport.addEventListener('scroll', updateChatKeyboardOffset);
+}
+window.addEventListener('resize', updateChatKeyboardOffset);
+byId('chatInput').addEventListener('focus', () => {
+setTimeout(updateChatKeyboardOffset, 80);
+setTimeout(() => {
+const messages = byId('chatMessages');
+if(messages) messages.scrollTop = messages.scrollHeight;
+}, 120);
+});
+byId('chatInput').addEventListener('blur', () => {
+setTimeout(updateChatKeyboardOffset, 120);
+});
+updateChatKeyboardOffset();
+
 const navButtons = document.querySelectorAll('.nav-btn');
 navButtons.forEach((btn)=>{
 btn.addEventListener('click', ()=>{
