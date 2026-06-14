@@ -69,8 +69,8 @@ if (-not $RepositoryUrl -or $RepositoryUrl -notmatch '^https://github\.com/.+/.+
   throw 'Please use a GitHub HTTPS URL ending with .git'
 }
 
-$existingRemote = git remote get-url origin 2>$null
-if ($LASTEXITCODE -eq 0 -and $existingRemote) {
+$remotes = @(git remote)
+if ($remotes -contains 'origin') {
   git remote set-url origin $RepositoryUrl | Out-Host
 } else {
   git remote add origin $RepositoryUrl | Out-Host
