@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: shashi-backend
+    env: node
+    plan: free
+    rootDir: shashi-app-social-run/backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: cloudinary
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_UPLOAD_PRESET
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false
+      - key: FIREBASE_CONFIG
+        sync: false

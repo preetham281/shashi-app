@@ -1,0 +1,29 @@
+{
+  "name": "shashi-app",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node start-social-app.js",
+    "restart": "restart-shashi-app.bat",
+    "sync:web": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\sync-android-web.ps1",
+    "connect:atlas": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\connect-atlas.ps1",
+    "connect:hosting": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\connect-hosting.ps1",
+    "check:ready": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\check-project-readiness.ps1",
+    "connect:firebase-android": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\install-firebase-android-file.ps1",
+    "connect:firebase-backend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\install-firebase-backend-credentials.ps1",
+    "delete:user": "node delete-user-account.js",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android"
+  },
+  "devDependencies": {
+    "@railway/cli": "^4.66.0",
+    "netlify-cli": "^26.1.0",
+    "vercel": "^54.6.1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "firebase": "^12.14.0"
+  }
+}

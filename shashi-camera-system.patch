@@ -1,0 +1,584 @@
+*** Begin Patch
+*** Update File: F:\shashi app\backend\models\Message.js
+@@
+ const messageSchema = new mongoose.Schema({
+   sender: String,
+   receiver: String,
+-  text: String
++  text: {
++    type: String,
++    default: ''
++  },
++  messageType: {
++    type: String,
++    enum: ['text', 'image', 'video'],
++    default: 'text'
++  },
++  mediaUrl: {
++    type: String,
++    default: ''
++  },
++  mediaType: {
++    type: String,
++    default: ''
++  },
++  filter: {
++    type: String,
++    default: 'none'
++  }
+ }, {
+   timestamps: true
+ });
+*** Update File: F:\shashi app\frontend\index.html
+@@
+ <button type="button" class="camera-btn" onclick="openCamera()" title="Camera">
+ <i class="fa-solid fa-camera"></i>
+ </button>
+@@
+ <div class="message-input">
++<input id="mediaUploadInput" class="hidden" type="file" accept="image/*,video/*" />
++<button type="button" class="icon-btn" onclick="chooseMediaFile()" title="Upload media">
++<i class="fa-solid fa-paperclip"></i>
++</button>
+ <input id="chatInput" type="text" placeholder="Login or signup to chat" />
+ <button id="sendButton" class="primary-btn" onclick="sendChat()" disabled>
+ Send
+ </button>
+ </div>
+@@
+ </main>
+ </div>
++
++<div id="cameraModal" class="camera-modal hidden">
++<div class="camera-panel">
++<div class="camera-header">
++<div>
++<h2>Camera</h2>
++<small id="cameraStatus">Ready</small>
++</div>
++<button class="icon-btn danger" onclick="closeCamera()" title="Close camera">
++<i class="fa-solid fa-xmark"></i>
++</button>
++</div>
++
++<div class="camera-stage">
++<video id="cameraVideo" autoplay playsinline muted></video>
++<canvas id="cameraCanvas" class="hidden"></canvas>
++<div id="cameraPreview" class="camera-preview hidden"></div>
++</div>
++
++<div class="filter-strip">
++<button class="filter-btn active" data-filter="none" onclick="setCameraFilter('none')">Normal</button>
++<button class="filter-btn" data-filter="warm" onclick="setCameraFilter('warm')">Warm</button>
++<button class="filter-btn" data-filter="cool" onclick="setCameraFilter('cool')">Cool</button>
++<button class="filter-btn" data-filter="mono" onclick="setCameraFilter('mono')">Mono</button>
++<button class="filter-btn" data-filter="vivid" onclick="setCameraFilter('vivid')">Vivid</button>
++<button class="filter-btn" data-filter="noir" onclick="setCameraFilter('noir')">Noir</button>
++</div>
++
++<div class="camera-actions">
++<button class="primary-btn" onclick="capturePhoto()">
++<i class="fa-solid fa-camera"></i> Photo
++</button>
++<button id="recordButton" class="primary-btn" onclick="toggleRecording()">
++<i class="fa-solid fa-circle"></i> Record
++</button>
++<button id="sendMediaButton" class="primary-btn" onclick="sendCapturedMedia()" disabled>
++<i class="fa-solid fa-paper-plane"></i> Send
++</button>
++<button class="ghost-btn" onclick="clearCapturedMedia()">Retake</button>
++</div>
++</div>
++</div>
+ 
+ <nav class="mobile-nav">
+*** Update File: F:\shashi app\frontend\app.js
+@@
+ let currentUser = JSON.parse(localStorage.getItem('shashiUser') || 'null');
+ let authToken = localStorage.getItem('shashiToken') || '';
+ let authMode = 'login';
++let cameraStream = null;
++let mediaRecorder = null;
++let recordedChunks = [];
++let capturedMedia = null;
++let activeCameraFilter = 'none';
++
++const cameraFilters = {
++none: 'none',
++warm: 'sepia(0.28) saturate(1.35) contrast(1.05)',
++cool: 'saturate(1.15) hue-rotate(185deg) contrast(1.08)',
++mono: 'grayscale(1) contrast(1.12)',
++vivid: 'saturate(1.8) contrast(1.18)',
++noir: 'grayscale(1) contrast(1.45) brightness(0.82)'
++};
+@@
+-async function openCamera(){
+-try{
+-await navigator.mediaDevices.getUserMedia({ video:true });
+-alert('Camera opened');
+-}catch(error){
+-alert('Camera permission denied');
+-}
+-}
++async function openCamera(){
++if(!currentUser){
++alert('Please login or signup first.');
++return;
++}
++
++try{
++byId('cameraModal').classList.remove('hidden');
++byId('cameraStatus').innerText = 'Opening camera...';
++cameraStream = await navigator.mediaDevices.getUserMedia({
++video: {
++facingMode: 'user',
++width: { ideal: 1280 },
++height: { ideal: 720 }
++},
++audio: true
++});
++
++const video = byId('cameraVideo');
++video.srcObject = cameraStream;
++setCameraFilter(activeCameraFilter);
++byId('cameraStatus').innerText = 'Camera ready';
++}catch(error){
++byId('cameraStatus').innerText = 'Camera permission denied';
++alert('Camera permission denied or unavailable.');
++}
++}
++
++function closeCamera(){
++if(mediaRecorder && mediaRecorder.state === 'recording'){
++mediaRecorder.stop();
++}
++
++if(cameraStream){
++cameraStream.getTracks().forEach((track)=>track.stop());
++cameraStream = null;
++}
++
++clearCapturedMedia();
++byId('cameraModal').classList.add('hidden');
++}
++
++function setCameraFilter(filterName){
++activeCameraFilter = filterName;
++const filter = cameraFilters[filterName] || cameraFilters.none;
++const video = byId('cameraVideo');
++const preview = byId('cameraPreview');
++
++if(video){
++video.style.filter = filter;
++}
++
++if(preview){
++preview.style.filter = filter;
++}
++
++document.querySelectorAll('.filter-btn').forEach((button)=>{
++button.classList.toggle('active', button.dataset.filter === filterName);
++});
++}
++
++function capturePhoto(){
++const video = byId('cameraVideo');
++const canvas = byId('cameraCanvas');
++
++if(!cameraStream || !video.videoWidth){
++alert('Camera is not ready yet.');
++return;
++}
++
++canvas.width = video.videoWidth;
++canvas.height = video.videoHeight;
++const ctx = canvas.getContext('2d');
++ctx.filter = cameraFilters[activeCameraFilter] || 'none';
++ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
++
++capturedMedia = {
++messageType: 'image',
++mediaType: 'image/jpeg',
++mediaUrl: canvas.toDataURL('image/jpeg', 0.9),
++filter: activeCameraFilter,
++text: 'Photo'
++};
++
++renderCapturedPreview();
++}
++
++function toggleRecording(){
++if(!cameraStream){
++alert('Open camera first.');
++return;
++}
++
++if(mediaRecorder && mediaRecorder.state === 'recording'){
++mediaRecorder.stop();
++return;
++}
++
++recordedChunks = [];
++mediaRecorder = new MediaRecorder(cameraStream, {
++mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
++? 'video/webm;codecs=vp9'
++: 'video/webm'
++});
++
++mediaRecorder.ondataavailable = (event)=>{
++if(event.data.size > 0){
++recordedChunks.push(event.data);
++}
++};
++
++mediaRecorder.onstop = ()=>{
++const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
++const reader = new FileReader();
++reader.onload = ()=>{
++capturedMedia = {
++messageType: 'video',
++mediaType: blob.type,
++mediaUrl: reader.result,
++filter: activeCameraFilter,
++text: 'Video'
++};
++renderCapturedPreview();
++byId('recordButton').innerHTML = '<i class="fa-solid fa-circle"></i> Record';
++byId('cameraStatus').innerText = 'Video ready';
++};
++reader.readAsDataURL(blob);
++};
++
++mediaRecorder.start();
++byId('recordButton').innerHTML = '<i class="fa-solid fa-stop"></i> Stop';
++byId('cameraStatus').innerText = 'Recording...';
++}
++
++function renderCapturedPreview(){
++const preview = byId('cameraPreview');
++preview.classList.remove('hidden');
++
++if(capturedMedia.messageType === 'image'){
++preview.innerHTML = `<img src="${capturedMedia.mediaUrl}" alt="Captured photo">`;
++}else{
++preview.innerHTML = `<video src="${capturedMedia.mediaUrl}" controls></video>`;
++}
++
++setCameraFilter(activeCameraFilter);
++byId('sendMediaButton').disabled = false;
++byId('cameraStatus').innerText = `${capturedMedia.messageType === 'image' ? 'Photo' : 'Video'} ready`;
++}
++
++function clearCapturedMedia(){
++capturedMedia = null;
++const preview = byId('cameraPreview');
++if(preview){
++preview.innerHTML = '';
++preview.classList.add('hidden');
++preview.style.filter = cameraFilters[activeCameraFilter] || 'none';
++}
++const sendButton = byId('sendMediaButton');
++if(sendButton){
++sendButton.disabled = true;
++}
++}
+@@
+ function createMessageElement(message, type){
+ const msg = document.createElement('div');
+ msg.classList.add('message', type);
+-msg.innerText = message;
++
++if(typeof message === 'object' && message.messageType !== 'text'){
++const caption = message.text ? `<small>${message.text}</small>` : '';
++if(message.messageType === 'image'){
++msg.classList.add('media-message');
++msg.innerHTML = `<img src="${message.mediaUrl}" alt="Shared image">${caption}`;
++}else{
++msg.classList.add('media-message');
++msg.innerHTML = `<video src="${message.mediaUrl}" controls></video>${caption}`;
++}
++}else{
++msg.innerText = typeof message === 'object' ? message.text : message;
++}
++
+ return msg;
+ }
+@@
+ messages.forEach((message)=>{
+ const type =
+ message.sender === currentUser.username || message.sender === 'You'
+ ? 'sent'
+ : 'received';
+ 
+-appendMessage(message.text, type);
++appendMessage(message, type);
+ });
+@@
+ const chatMessage = {
+ sender: currentUser.username,
+ receiver: currentChatUser,
+-text: message
++text: message,
++messageType: 'text'
+ };
+@@
+ }
++
++async function sendMediaMessage(media){
++if(!currentUser){
++alert('Please login or signup first.');
++return;
++}
++
++const chatMessage = {
++sender: currentUser.username,
++receiver: currentChatUser,
++text: media.text || '',
++messageType: media.messageType,
++mediaUrl: media.mediaUrl,
++mediaType: media.mediaType,
++filter: media.filter || 'none'
++};
++
++appendMessage(chatMessage, 'sent');
++
++try{
++const response = await fetch(`${API_BASE_URL}/api/messages`, {
++method: 'POST',
++headers: { 'Content-Type': 'application/json' },
++body: JSON.stringify(chatMessage)
++});
++
++if(!response.ok){
++throw new Error('Unable to save media');
++}
++
++if(socket){
++socket.emit('send_message', chatMessage);
++}
++
++setStatus('Backend online', true);
++}catch(error){
++console.error(error);
++setStatus('Backend offline', false);
++alert('Media was shown here, but could not be saved. Please check backend.');
++}
++}
++
++async function sendCapturedMedia(){
++if(!capturedMedia){
++return;
++}
++
++await sendMediaMessage(capturedMedia);
++clearCapturedMedia();
++closeCamera();
++}
++
++function chooseMediaFile(){
++if(!currentUser){
++alert('Please login or signup first.');
++return;
++}
++
++byId('mediaUploadInput').click();
++}
++
++function handleMediaUpload(event){
++const file = event.target.files[0];
++event.target.value = '';
++
++if(!file){
++return;
++}
++
++const isImage = file.type.startsWith('image/');
++const isVideo = file.type.startsWith('video/');
++
++if(!isImage && !isVideo){
++alert('Please choose an image or video.');
++return;
++}
++
++if(file.size > 8 * 1024 * 1024){
++alert('Please choose media below 8 MB.');
++return;
++}
++
++const reader = new FileReader();
++reader.onload = async ()=>{
++await sendMediaMessage({
++messageType: isImage ? 'image' : 'video',
++mediaType: file.type,
++mediaUrl: reader.result,
++filter: 'uploaded',
++text: isImage ? 'Image' : 'Video'
++});
++};
++reader.readAsDataURL(file);
++}
+@@
+ byId('chatInput').addEventListener('keypress', function(e){
+ if(e.key === 'Enter'){
+ sendChat();
+ }
+ });
++byId('mediaUploadInput').addEventListener('change', handleMediaUpload);
+@@
+-appendMessage(message.text, 'received');
++appendMessage(message, 'received');
+ });
+*** Update File: F:\shashi app\frontend\style.css
+@@
+ .camera-btn{
+@@
+ }
++
++.icon-btn{
++  width:44px;
++  height:44px;
++  border:none;
++  border-radius:10px;
++  background:#eef2ff;
++  color:var(--secondary);
++  font-size:18px;
++  cursor:pointer;
++}
++
++.icon-btn.danger{
++  background:#fee2e2;
++  color:#b91c1c;
++}
+@@
+ .message{
+@@
+ }
++
++.media-message{
++  display:grid;
++  gap:8px;
++  padding:8px;
++}
++
++.media-message img,
++.media-message video{
++  display:block;
++  width:min(320px,70vw);
++  max-height:360px;
++  border-radius:10px;
++  object-fit:cover;
++}
++
++.media-message small{
++  padding:0 6px 4px;
++  opacity:.85;
++}
+@@
+ .message-input{
+   display:flex;
+   gap:10px;
+   margin-top:20px;
+ }
++
++.camera-modal{
++  position:fixed;
++  inset:0;
++  z-index:2000;
++  background:rgba(15,23,42,.72);
++  display:flex;
++  align-items:center;
++  justify-content:center;
++  padding:18px;
++}
++
++.camera-panel{
++  width:min(940px,100%);
++  max-height:92vh;
++  overflow:auto;
++  background:white;
++  border-radius:16px;
++  padding:18px;
++  box-shadow:0 24px 70px rgba(0,0,0,.28);
++}
++
++.camera-header{
++  display:flex;
++  justify-content:space-between;
++  align-items:center;
++  gap:16px;
++  margin-bottom:14px;
++}
++
++.camera-header small{
++  color:var(--gray);
++}
++
++.camera-stage{
++  position:relative;
++  background:#020617;
++  border-radius:14px;
++  overflow:hidden;
++  aspect-ratio:16/9;
++}
++
++.camera-stage video,
++.camera-stage canvas,
++.camera-preview{
++  width:100%;
++  height:100%;
++}
++
++.camera-stage video,
++.camera-preview img,
++.camera-preview video{
++  display:block;
++  width:100%;
++  height:100%;
++  object-fit:cover;
++}
++
++.camera-preview{
++  position:absolute;
++  inset:0;
++  background:#020617;
++}
++
++.filter-strip{
++  display:flex;
++  gap:8px;
++  overflow:auto;
++  padding:14px 0;
++}
++
++.filter-btn{
++  border:1px solid var(--line);
++  border-radius:999px;
++  padding:9px 13px;
++  background:#f8fafc;
++  color:var(--text);
++  font-weight:bold;
++  cursor:pointer;
++  white-space:nowrap;
++}
++
++.filter-btn.active{
++  background:var(--text);
++  color:white;
++}
++
++.camera-actions{
++  display:flex;
++  flex-wrap:wrap;
++  gap:10px;
++}
++
++.ghost-btn{
++  border:1px solid var(--line);
++  padding:14px;
++  border-radius:10px;
++  background:white;
++  color:var(--text);
++  font-weight:bold;
++  cursor:pointer;
++}
+*** End Patch

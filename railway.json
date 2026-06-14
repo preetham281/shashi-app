@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "cd shashi-app-social-run/backend && npm install"
+  },
+  "deploy": {
+    "startCommand": "cd shashi-app-social-run/backend && npm start",
+    "healthcheckPath": "/",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}

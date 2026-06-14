@@ -1,0 +1,23 @@
+{
+  "project_info": {
+    "project_number": "123456789012",
+    "project_id": "your-firebase-project-id",
+    "storage_bucket": "your-firebase-project-id.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123456789012:android:replace_me",
+        "android_client_info": {
+          "package_name": "com.shashi.app"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "replace_with_firebase_android_api_key"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}

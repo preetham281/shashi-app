@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>shashi</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+</head>
+
+<body>
+<div class="app">
+<aside class="sidebar">
+<div class="logo">S</div>
+
+<button class="nav-btn active" onclick="showPage('chatPage')" title="Chats">
+<i class="fa-solid fa-comments"></i>
+</button>
+
+<button class="nav-btn" onclick="showPage('homePage')" title="Reels">
+<i class="fa-solid fa-play"></i>
+</button>
+
+<button class="nav-btn" onclick="showPage('statusPage')" title="Status">
+<i class="fa-solid fa-circle-dot"></i>
+</button>
+
+<button class="nav-btn" onclick="showPage('onlinePage')" title="Posts">
+<i class="fa-solid fa-newspaper"></i>
+</button>
+
+<button class="nav-btn" onclick="showPage('searchPage')" title="Search">
+<i class="fa-solid fa-magnifying-glass"></i>
+</button>
+
+<button class="nav-btn profile-menu-btn" onclick="toggleProfileMenu()" title="Profile">
+<i class="fa-solid fa-user"></i>
+</button>
+</aside>
+
+<main class="main">
+<header class="header">
+<button type="button" class="top-icon-btn header-search-btn" onclick="showPage('searchPage')" title="Search">
+<i class="fa-solid fa-magnifying-glass"></i>
+</button>
+<button type="button" class="camera-btn header-camera-btn" onclick="openCamera()" title="Camera">
+<i class="fa-solid fa-camera"></i>
+</button>
+<button type="button" class="profile-btn profile-menu-btn" id="profileInitial" onclick="toggleProfileMenu()" title="Menu">
+<i class="fa-solid fa-bars"></i>
+</button>
+
+<div class="profile-menu" id="profileMenu">
+<p id="profileUserLabel" class="profile-name">Sign in to save messages</p>
+<button class="profile-menu-item" onclick="showPage('profilePage')"><i class="fa-solid fa-user"></i><span>Profile</span></button>
+<button class="profile-menu-item" onclick="showPage('friendsPage')"><i class="fa-solid fa-user-plus"></i><span>Friends</span></button>
+<button class="profile-menu-item" onclick="openNewGroupFromMenu()"><i class="fa-solid fa-users-line"></i><span>New Group</span></button>
+<button class="profile-menu-item" onclick="showPage('aiPage')"><i class="fa-solid fa-wand-magic-sparkles"></i><span>AI Tools</span></button>
+<button class="profile-menu-item" onclick="showPage('advancedPage')"><i class="fa-solid fa-layer-group"></i><span>Advanced</span></button>
+<div class="api-settings">
+<label for="apiBaseInput">Backend URL</label>
+<input id="apiBaseInput" type="url" placeholder="http://10.0.2.2:5000" />
+<button class="profile-menu-item" onclick="saveApiBase()"><i class="fa-solid fa-floppy-disk"></i><span>Save URL</span></button>
+</div>
+<button class="profile-menu-item" onclick="showPage('settingsPage')"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+<button class="profile-menu-item hidden" id="logoutButton"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></button>
+</div>
+
+<div class="header-left">
+<div class="brand-row">
+<button type="button" class="post-icon-btn" onclick="showPage('postsPage')" title="Post online">
+<i class="fa-solid fa-square-plus"></i>
+</button>
+<h1>shashi</h1>
+</div>
+<span id="apiStatus" class="api-status">Checking backend...</span>
+</div>
+
+<div class="header-right">
+<div id="notificationPanel" class="notification-panel hidden">
+<div class="section-title">
+<h2>Notifications</h2>
+<button class="ghost-btn small" onclick="markNotificationsRead()">Read</button>
+</div>
+<div id="notificationList" class="notification-list"></div>
+</div>
+</div>
+</header>
+
+<section id="homePage" class="page-section hidden reel-page">
+<div class="reels-page-shell">
+<div class="reels-topbar">
+<button class="reels-icon-btn" onclick="showPage('chatPage')" title="Back"><i class="fa-solid fa-arrow-left"></i></button>
+<h2>Reels</h2>
+</div>
+<div class="reels-top-actions">
+<button class="reels-icon-btn" onclick="toggleReelUpload()" title="Add reel"><i class="fa-solid fa-plus"></i></button>
+<input id="reelSearchInput" type="search" placeholder="Search reels" oninput="filterReels(this.value)" />
+<button class="reels-icon-btn reels-menu-btn" onclick="toggleReelsMenu()" title="Reels menu"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+<div id="reelsMenu" class="reels-menu hidden">
+<button onclick="showReelCollection('liked')"><i class="fa-solid fa-heart"></i><span>Like</span></button>
+<button onclick="showReelCollection('commented')"><i class="fa-solid fa-comment"></i><span>Comment</span></button>
+<button onclick="showReelCollection('saved')"><i class="fa-solid fa-bookmark"></i><span>Save</span></button>
+</div>
+</div>
+<div id="reelUploadPanel" class="card reel-upload-card hidden">
+<div class="section-title">
+<h2>Upload Reel</h2>
+<div class="status">Video</div>
+</div>
+<input id="reelVideoInput" type="file" accept="video/*" />
+<textarea id="reelCaptionInput" placeholder="Write a caption..."></textarea>
+<button class="primary-btn" onclick="uploadReel()">Upload reel</button>
+<p id="reelMessage" class="form-message"></p>
+</div>
+<div id="reelCollectionPanel" class="reel-collection-panel hidden">
+<div class="section-title">
+<h2 id="reelCollectionTitle">Liked reels</h2>
+<button class="ghost-btn small" onclick="closeReelCollection()">Close</button>
+</div>
+<div id="reelCollectionList" class="reel-collection-list"></div>
+</div>
+<div id="reelsFeed" class="reels-feed"></div>
+</div>
+</section>
+
+<section id="postsPage" class="page-section hidden">
+<div class="post-layout">
+<div class="card post-upload-card">
+<div class="section-title">
+<h2>Upload Post</h2>
+<div class="status">Account</div>
+</div>
+<textarea id="postCaptionInput" placeholder="Write something for your account..."></textarea>
+<input id="postMediaInput" type="file" accept="image/*,video/*" />
+<button class="primary-btn" onclick="uploadAccountPost()">Upload post</button>
+<p id="postMessage" class="form-message"></p>
+</div>
+<div class="card">
+<div class="section-title">
+<h2>Online Posts</h2>
+<div class="status">Live</div>
+</div>
+<div id="postsFeed" class="posts-feed"></div>
+</div>
+</div>
+</section>
+
+<section id="chatPage" class="page-section">
+<div class="content-grid chat-list-grid">
+<div class="chat-list-surface">
+<div class="section-title">
+<h2>Chats</h2>
+<div class="status">MongoDB</div>
+</div>
+
+<div id="authPanel" class="auth-panel">
+<div class="auth-tabs">
+<button type="button" id="loginMode" class="active">Login</button>
+<button type="button" id="signupMode">Signup</button>
+</div>
+
+<form id="authForm">
+<input id="username" class="signup-only hidden" type="text" placeholder="Username" autocomplete="username" />
+<input id="email" type="email" placeholder="Email" autocomplete="email" />
+<input id="phone" type="tel" placeholder="Mobile number" autocomplete="tel" />
+<input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+<button id="authSubmit" class="primary-btn" type="submit">Login</button>
+<div class="auth-extra-actions">
+<button type="button" class="ghost-btn" onclick="startPhoneOtpLogin()">Phone OTP</button>
+<button type="button" class="ghost-btn" onclick="startPasswordReset()">Reset password</button>
+</div>
+<div id="authCodePanel" class="auth-code-panel hidden">
+<input id="authCodeInput" inputmode="numeric" maxlength="6" placeholder="6-digit security code" />
+<input id="newPasswordInput" class="hidden" type="password" placeholder="New password" />
+<button type="button" class="primary-btn" onclick="verifyAuthCode()">Verify code</button>
+</div>
+<p id="authMessage" class="form-message"></p>
+</form>
+</div>
+
+<div class="chat-item selected demo-chat-item" data-user="Aarav" onclick="openChat('Aarav')">
+<div class="chat-avatar"><span>A</span></div>
+<div>
+<h4>Aarav <span></span></h4>
+<small>Available now</small>
+</div>
+</div>
+
+<div class="chat-item demo-chat-item" data-user="Priya" onclick="openChat('Priya')">
+<div class="chat-avatar"><span>P</span></div>
+<div>
+<h4>Priya <span></span></h4>
+<small>Sent a reel</small>
+</div>
+</div>
+
+<div class="chat-item demo-chat-item" data-user="Rohit" onclick="openChat('Rohit')">
+<div class="chat-avatar"><span>R</span></div>
+<div>
+<h4>Rohit <span></span></h4>
+<small>Online now</small>
+</div>
+</div>
+<div id="chatUsersList"></div>
+<div id="chatGroupsList" class="chat-groups-list"></div>
+</div>
+</div>
+</section>
+
+<section id="conversationPage" class="page-section hidden">
+<div class="card chat-card full-chat-card">
+<div class="chat-person-header">
+<button type="button" class="chat-arrow-back" onclick="showPage('chatPage')" title="Back to chats" aria-label="Back to chats"></button>
+<div class="chat-person-title">
+<div id="chatPersonAvatar" class="user-avatar">A</div>
+<button type="button" class="chat-person-details-link" onclick="openCurrentChatAccount()" title="Open account">
+<h2 id="chatUser">Aarav</h2>
+<small id="chatUserLabel">Sign in to save messages</small>
+</button>
+</div>
+<div class="chat-person-actions">
+<button type="button" onclick="openChatGames()" title="Games">
+<i class="fa-solid fa-gamepad"></i>
+</button>
+<button type="button" onclick="startCurrentChatCall('video')" title="Video call">
+<i class="fa-solid fa-video"></i>
+</button>
+<button type="button" onclick="startCurrentChatCall('voice')" title="Audio call">
+<i class="fa-solid fa-phone"></i>
+</button>
+<button type="button" class="chat-person-menu-btn" onclick="toggleChatPersonMenu()" title="Chat settings">
+<i class="fa-solid fa-ellipsis-vertical"></i>
+</button>
+</div>
+
+<div id="messageSelectionBar" class="message-selection-bar hidden">
+<button type="button" class="message-selection-close" onclick="clearMessageSelection()" title="Cancel selection">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<strong id="messageSelectionTitle">1 selected</strong>
+<div class="message-selection-actions">
+<button type="button" data-selection-action="single" onclick="replyToSelectedMessage()" title="Reply"><i class="fa-solid fa-reply"></i><span>Reply</span></button>
+<button type="button" data-selection-action="single" onclick="showSelectedMessageInfo()" title="Information"><i class="fa-solid fa-circle-info"></i><span>Info</span></button>
+<button type="button" data-selection-action="copy" onclick="copySelectedMessages()" title="Copy"><i class="fa-solid fa-copy"></i><span>Copy</span></button>
+<button type="button" data-selection-action="all" onclick="deleteSelectedMessage()" title="Delete"><i class="fa-solid fa-trash"></i><span>Delete</span></button>
+<button type="button" data-selection-action="multi" onclick="forwardSelectedMessages()" title="Forward"><i class="fa-solid fa-share"></i><span>Forward</span></button>
+<button type="button" data-selection-action="single" onclick="shareSelectedMessage()" title="Share"><i class="fa-solid fa-share-nodes"></i><span>Share</span></button>
+<button type="button" data-selection-action="all" onclick="pinSelectedMessage()" title="Pin"><i class="fa-solid fa-thumbtack"></i><span>Pin</span></button>
+</div>
+</div>
+</div>
+
+<div id="chatPersonMenu" class="chat-person-menu hidden">
+<button type="button" class="person-chat-option" onclick="openCurrentChatAccount()">
+<i class="fa-solid fa-address-card"></i>
+<span>Profile</span>
+</button>
+<button type="button" class="person-chat-option" onclick="searchInCurrentChat()">
+<i class="fa-solid fa-magnifying-glass"></i>
+<span>Search</span>
+</button>
+<button type="button" class="person-chat-option" onclick="toggleCurrentChatMute()">
+<i class="fa-solid fa-bell-slash"></i>
+<span id="chatMuteLabel">Mute notification</span>
+</button>
+<button type="button" class="person-chat-option" onclick="openDisappearingMessages()">
+<i class="fa-solid fa-clock"></i>
+<span>Disappearing messages</span>
+</button>
+<button type="button" class="person-chat-option" onclick="openChatThemes()">
+<i class="fa-solid fa-palette"></i>
+<span>Themes</span>
+</button>
+<button type="button" class="person-chat-option danger-menu-item" onclick="blockCurrentChatUser()">
+<i class="fa-solid fa-ban"></i>
+<span>Block</span>
+</button>
+<button type="button" class="person-chat-option chat-more-menu-btn" onclick="toggleChatMoreMenu()">
+<i class="fa-solid fa-layer-group"></i>
+<span>More</span>
+</button>
+<button type="button" class="person-chat-option" onclick="requestChatCallPermissions()">
+<i class="fa-solid fa-video"></i>
+<span>Mic & camera permission</span>
+</button>
+<button type="button" class="group-chat-option hidden" onclick="openCurrentGroupInfo()">
+<i class="fa-solid fa-circle-info"></i>
+<span>Group info</span>
+</button>
+<button type="button" class="group-chat-option hidden" onclick="searchInCurrentChat()">
+<i class="fa-solid fa-magnifying-glass"></i>
+<span>Search</span>
+</button>
+<button type="button" class="group-chat-option hidden" onclick="toggleCurrentChatMute()">
+<i class="fa-solid fa-bell-slash"></i>
+<span id="chatGroupMuteLabel">Mute notification</span>
+</button>
+<button type="button" class="group-chat-option hidden" onclick="openChatThemes()">
+<i class="fa-solid fa-palette"></i>
+<span>Themes</span>
+</button>
+<button type="button" class="group-chat-option chat-more-menu-btn hidden" onclick="toggleChatMoreMenu()">
+<i class="fa-solid fa-layer-group"></i>
+<span>More</span>
+</button>
+<button type="button" class="group-chat-option danger-menu-item hidden" onclick="leaveCurrentGroup()">
+<i class="fa-solid fa-right-from-bracket"></i>
+<span>Leave group</span>
+</button>
+<small id="chatCallPermissionText">Not checked yet</small>
+</div>
+<div id="chatMoreMenu" class="chat-more-menu hidden">
+<button type="button" class="person-more-option" onclick="showChatPlaceholder('Group with')"><i class="fa-solid fa-user-group"></i><span>Group with</span></button>
+<button type="button" class="person-more-option" onclick="showChatPlaceholder('Media')"><i class="fa-solid fa-image"></i><span>Media</span></button>
+<button type="button" class="person-more-option" onclick="showChatPlaceholder('Links')"><i class="fa-solid fa-link"></i><span>Links</span></button>
+<button type="button" class="person-more-option" onclick="showChatPlaceholder('Documents')"><i class="fa-solid fa-file-lines"></i><span>Documents</span></button>
+<button type="button" class="person-more-option danger-menu-item" onclick="clearCurrentChat()"><i class="fa-solid fa-trash"></i><span>Clear chat</span></button>
+<button type="button" class="group-more-option hidden" onclick="editCurrentGroupDetails()"><i class="fa-solid fa-pen"></i><span>Edit group</span></button>
+<button type="button" class="group-more-option hidden" onclick="addMemberToCurrentGroup()"><i class="fa-solid fa-user-plus"></i><span>Add member</span></button>
+<button type="button" class="group-more-option hidden" onclick="removeMemberFromCurrentGroup()"><i class="fa-solid fa-user-minus"></i><span>Remove member</span></button>
+<button type="button" class="group-more-option hidden" onclick="makeAdminInCurrentGroup()"><i class="fa-solid fa-user-shield"></i><span>Make admin</span></button>
+<button type="button" class="group-more-option hidden" onclick="removeAdminFromCurrentGroup()"><i class="fa-solid fa-user-lock"></i><span>Remove admin</span></button>
+<button type="button" class="group-more-option danger-menu-item hidden" onclick="clearCurrentChat()"><i class="fa-solid fa-trash"></i><span>Clear group chat</span></button>
+<button type="button" class="group-more-option danger-menu-item hidden" onclick="deleteCurrentGroup()"><i class="fa-solid fa-trash-can"></i><span>Delete group</span></button>
+</div>
+
+<div id="chatGamePanel" class="chat-game-panel hidden">
+<div class="chat-game-topbar">
+<button type="button" class="chat-game-back" onclick="closeChatGames()" title="Back to chat"><i class="fa-solid fa-arrow-left"></i></button>
+<div class="chat-game-title">
+<h3>Games with <span id="chatGameFriendName">Friend</span></h3>
+<small id="chatGameStatus">Choose a game to play online.</small>
+</div>
+<button type="button" class="chat-game-close" onclick="cancelChatGameBackground()" title="Hide background game"><i class="fa-solid fa-xmark"></i></button>
+</div>
+<div id="chatGameChoices" class="chat-game-choices"></div>
+<div id="chatGameBoard" class="chat-game-board"></div>
+</div>
+
+<div class="conversation-body">
+<div class="conversation-emoji-art" aria-hidden="true">
+<span class="emoji-art emoji-art-one">&#128172;</span>
+<span class="emoji-art emoji-art-two">&#10024;</span>
+<span class="emoji-art emoji-art-three">&#128153;</span>
+<span class="emoji-art emoji-art-four">&#128522;</span>
+<span class="emoji-art emoji-art-five">&#127775;</span>
+<span class="emoji-art emoji-art-six">&#128640;</span>
+<span class="emoji-art emoji-art-seven">&#127925;</span>
+<span class="emoji-art emoji-art-eight">&#128077;</span>
+</div>
+<div id="chatGameAmbient" class="chat-game-ambient hidden"></div>
+<div id="chatMessages" class="chat-messages"></div>
+
+<div class="emoji-picker hidden" id="emojiPicker"></div>
+<div class="message-input">
+<input id="chatMediaInput" class="hidden" type="file" accept="*/*" multiple />
+<input id="chatGalleryInput" class="hidden" type="file" accept="image/*,video/*" multiple />
+<input id="chatDocumentInput" class="hidden" type="file" accept="*/*" multiple />
+<input id="chatCatalogueInput" class="hidden" type="file" accept="image/*,video/*,.pdf,*/*" multiple />
+<button type="button" class="icon-btn" onclick="toggleEmojiPicker()" title="Emoji">
+<i class="fa-regular fa-face-smile"></i>
+</button>
+<button type="button" class="icon-btn attachment-menu-btn" onclick="toggleAttachmentMenu()" title="Attach">
+<i class="fa-solid fa-paperclip"></i>
+</button>
+<div id="attachmentMenu" class="attachment-menu hidden">
+<button type="button" onclick="chooseAttachment('document')"><i class="fa-solid fa-file-lines"></i><span>Documents</span></button>
+<button type="button" onclick="chooseAttachment('location')"><i class="fa-solid fa-location-dot"></i><span>Location</span></button>
+<button type="button" onclick="chooseAttachment('liveLocation')"><i class="fa-solid fa-location-crosshairs"></i><span>Live location</span></button>
+<button type="button" onclick="chooseAttachment('map')"><i class="fa-solid fa-map-location-dot"></i><span>Maps</span></button>
+<button type="button" onclick="chooseAttachment('contacts')"><i class="fa-solid fa-address-book"></i><span>Contacts</span></button>
+<button type="button" onclick="chooseAttachment('catalogue')"><i class="fa-solid fa-store"></i><span>Catalogue</span></button>
+<button type="button" onclick="chooseAttachment('quickReply')"><i class="fa-solid fa-reply"></i><span>Quick reply</span></button>
+<button type="button" onclick="chooseAttachment('gallery')"><i class="fa-solid fa-images"></i><span>Gallery</span></button>
+</div>
+<input id="chatInput" type="text" placeholder="Login or signup to chat" />
+<button id="calculatorPreview" class="calculator-preview hidden" type="button" onclick="sendCalculationResult()" title="Send calculation"></button>
+<button id="sendButton" class="chat-send-btn" onclick="sendChat()" title="Send message" disabled>
+<i class="fa-solid fa-paper-plane"></i>
+</button>
+</div>
+</div>
+</div>
+</section>
+
+<section id="profilePage" class="page-section hidden">
+<div class="profile-topbar">
+<button type="button" class="profile-top-icon" onclick="showPage('postsPage')" title="Upload posts and reels">
+<i class="fa-solid fa-square-plus"></i>
+</button>
+<h2 id="profileTopUsername" class="username-title">Profile</h2>
+<button type="button" class="profile-top-icon profile-local-menu-btn" onclick="toggleProfileLocalMenu()" title="Menu">
+<i class="fa-solid fa-bars"></i>
+</button>
+<div id="profileLocalMenu" class="profile-local-menu hidden">
+<button type="button" onclick="openProfileEditFromMenu()"><i class="fa-solid fa-user-pen"></i><span>Edit profile</span></button>
+<button type="button" onclick="shareMyProfile()"><i class="fa-solid fa-share-nodes"></i><span>Share profile</span></button>
+<button type="button" onclick="openProfileNotificationsFromMenu()"><i class="fa-solid fa-bell"></i><span>Notifications</span></button>
+<button type="button" onclick="openProfileTimeManagement()"><i class="fa-solid fa-hourglass-half"></i><span>Time management</span></button>
+<button type="button" onclick="openProfileAccountPrivacy()"><i class="fa-solid fa-shield-halved"></i><span>Account privacy</span></button>
+<button type="button" onclick="openProfileCloseFriends()"><i class="fa-solid fa-star"></i><span>Close friends</span></button>
+<button type="button" onclick="openProfileBlockedUsers()"><i class="fa-solid fa-ban"></i><span>Blocked</span></button>
+<button type="button" onclick="openProfileQrPanel()"><i class="fa-solid fa-qrcode"></i><span>Profile QR</span></button>
+<button type="button" onclick="openProfileSecurityCheck()"><i class="fa-solid fa-user-shield"></i><span>Security check</span></button>
+<button type="button" onclick="openProfileBackupFromMenu()"><i class="fa-solid fa-cloud-arrow-up"></i><span>Cloud backup</span></button>
+<button type="button" onclick="exportProfileDataFromMenu()"><i class="fa-solid fa-file-export"></i><span>Export data</span></button>
+<button type="button" onclick="openProfileLoginActivity()"><i class="fa-solid fa-chart-line"></i><span>Login activity</span></button>
+</div>
+<div id="profileAdvancedPanel" class="profile-advanced-menu-panel hidden"></div>
+</div>
+<div class="profile-grid">
+<div class="card">
+<div class="profile-summary-row">
+<div class="profile-identity-stack">
+<div class="profile-photo-wrap">
+<img id="profilePhotoPreview" class="profile-photo" alt="Profile photo" />
+<div class="profile-photo-fallback" id="profilePhotoFallback">S</div>
+<span id="profileOnlineDot" class="profile-online-dot hidden"></span>
+<button type="button" class="status-plus-badge" onclick="chooseProfileStatus()" title="Upload status">
+<i class="fa-solid fa-plus"></i>
+</button>
+<input id="profileStatusInput" class="hidden" type="file" accept="image/*,video/*" />
+</div>
+<small id="profileBioLine" class="profile-bio-line hidden"></small>
+</div>
+<div class="profile-stats" id="profileStats">
+<div><strong id="profileFollowersCount">0</strong><small>Followers</small></div>
+<div><strong id="profilePostsCount">0</strong><small>Posts</small></div>
+<div><strong id="profileFollowingCount">0</strong><small>Following</small></div>
+</div>
+</div>
+
+</div>
+
+<div class="profile-posts-section">
+<div class="section-title">
+<h2>My Posts</h2>
+<div class="status">Account</div>
+</div>
+<div id="profilePostsFeed" class="posts-feed profile-posts-feed"></div>
+</div>
+
+<div class="card">
+<div class="section-title">
+<h2>User Accounts</h2>
+<div class="status">Live</div>
+</div>
+<div id="usersList" class="users-list"></div>
+</div>
+</div>
+</section>
+
+<section id="profileEditPage" class="page-section hidden">
+<div class="card profile-edit-card">
+<div class="settings-topbar inline-topbar">
+<button type="button" class="settings-icon-btn" onclick="showPage('profilePage')" title="Back">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h2>Edit Profile</h2>
+<span class="settings-icon-spacer"></span>
+</div>
+<form id="profileForm" class="profile-form profile-edit-form">
+<label>
+Username
+<input id="profileUsername" type="text" placeholder="Username" />
+</label>
+<label>
+Email ID
+<input id="profileEmail" type="email" placeholder="Email" />
+</label>
+<label>
+Mobile number
+<input id="profilePhone" type="tel" placeholder="Mobile number" />
+</label>
+<details class="about-editor" open>
+<summary>About <span id="profileAboutDuration">Just now</span></summary>
+<textarea id="profileAbout" maxlength="140" placeholder="Write about yourself"></textarea>
+<div class="about-presets">
+<button type="button" onclick="setQuickAbout('Available')">Available</button>
+<button type="button" onclick="setQuickAbout('Busy')">Busy</button>
+<button type="button" onclick="setQuickAbout('At work')">At work</button>
+<button type="button" onclick="setQuickAbout('In a meeting')">In a meeting</button>
+<button type="button" onclick="setQuickAbout('Sleeping')">Sleeping</button>
+<button type="button" onclick="setQuickAbout('Battery low')">Battery low</button>
+<button type="button" onclick="setQuickAbout('Hey there! I am using shashi')">Default</button>
+</div>
+</details>
+<label class="profile-bio-field">
+Bio
+<textarea id="profileBio" maxlength="220" placeholder="Add your bio"></textarea>
+</label>
+<button class="primary-btn" type="submit">Save profile</button>
+<p id="profileMessage" class="form-message"></p>
+</form>
+<form id="photoForm" class="profile-form profile-photo-edit-form">
+<label>
+Profile photo
+<input id="profilePhotoInput" type="file" accept="image/*" />
+</label>
+<button class="primary-btn" type="submit">Upload photo</button>
+<p id="photoMessage" class="form-message"></p>
+</form>
+</div>
+</section>
+
+<section id="chatThemePage" class="page-section hidden">
+<div class="card chat-theme-card">
+<div class="settings-topbar">
+<button type="button" class="settings-icon-btn" onclick="showPage('conversationPage')" title="Back">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h2>Chat Themes</h2>
+<span class="settings-icon-spacer"></span>
+</div>
+<div id="chatThemeGrid" class="chat-theme-grid"></div>
+<input id="chatThemeGalleryInput" class="hidden" type="file" accept="image/*" onchange="saveChatGalleryTheme()" />
+</div>
+</section>
+
+<section id="userAccountPage" class="page-section hidden">
+<div class="card user-account-card">
+<div class="settings-topbar inline-topbar">
+<button type="button" class="settings-icon-btn" onclick="backFromUserAccount()" title="Back">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h2 id="viewUserTitle">Account</h2>
+<button type="button" class="settings-icon-btn user-profile-menu-btn" onclick="toggleUserProfileMenu()" title="Settings">
+<i class="fa-solid fa-ellipsis-vertical"></i>
+</button>
+<div id="userProfileMenu" class="user-profile-menu hidden">
+<button type="button" onclick="shareCurrentProfile()"><i class="fa-solid fa-share-nodes"></i><span>Share</span></button>
+<button type="button" onclick="editCurrentProfileContact()"><i class="fa-solid fa-pen"></i><span>Edit</span></button>
+<button type="button" onclick="addCurrentProfileToList()"><i class="fa-solid fa-list"></i><span>Add to list</span></button>
+<button type="button" onclick="copyCurrentProfileNumber()"><i class="fa-solid fa-copy"></i><span>Copy number</span></button>
+<button type="button" class="danger-menu-item" onclick="blockViewedProfileUser()"><i class="fa-solid fa-ban"></i><span>Block</span></button>
+</div>
+</div>
+<div id="viewUserProfile" class="view-user-profile"></div>
+</div>
+</section>
+
+<section id="contactNotificationPage" class="page-section hidden">
+<div class="card user-account-card">
+<div class="settings-topbar inline-topbar">
+<button type="button" class="settings-icon-btn" onclick="backToViewedProfile()" title="Back">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h2>Notifications</h2>
+<span class="settings-icon-spacer"></span>
+</div>
+<div class="notification-settings-stack">
+<div class="notification-group">
+<h4>Messages</h4>
+<label class="notification-toggle"><span>Mute notifications</span><input id="messageMuteToggle" type="checkbox" onchange="saveContactNotificationPrefs()"></label>
+<label class="notification-toggle"><span>Vibrate</span><input id="messageVibrateToggle" type="checkbox" onchange="saveContactNotificationPrefs()"></label>
+<div class="profile-inline-editor"><label>Notification tone</label><select id="messageToneSelect"><option>Default</option><option>Soft</option><option>Bright</option><option>Silent</option></select><button class="ghost-btn" onclick="saveContactNotificationPrefs()">Save</button></div>
+</div>
+<div class="notification-group">
+<h4>Calls</h4>
+<div class="profile-inline-editor"><label>Ringtone</label><select id="contactCallRingtoneSelect"><option>Default</option><option>Soft</option><option>Bright</option><option>Silent</option></select><button class="ghost-btn" onclick="saveContactNotificationPrefs()">Save</button></div>
+<label class="notification-toggle"><span>Vibration</span><input id="callVibrationToggle" type="checkbox" onchange="saveContactNotificationPrefs()"></label>
+</div>
+<div class="notification-group">
+<h4>Status</h4>
+<label class="notification-toggle"><span>Mute notifications</span><input id="statusMuteToggle" type="checkbox" onchange="saveContactNotificationPrefs()"></label>
+</div>
+<div class="notification-group">
+<h4>Chat extras</h4>
+<div class="profile-inline-editor"><label>Auto translate language</label><select id="contactTranslateLanguage"><option>Hindi</option><option>Telugu</option><option>Tamil</option><option>Kannada</option><option>English</option></select><button class="ghost-btn" onclick="saveContactTranslateLanguage()">Save</button></div>
+<div class="profile-inline-editor"><label>Relationship label</label><select id="contactRelationshipLabel"><option>Friend</option><option>Family</option><option>Work</option><option>College</option><option>Favorite</option></select><button class="ghost-btn" onclick="saveContactLabel()">Save</button></div>
+</div>
+</div>
+</div>
+</section>
+
+<section id="contactEditPage" class="page-section hidden">
+<div class="card user-account-card">
+<div class="settings-topbar inline-topbar">
+<button type="button" class="settings-icon-btn" onclick="backToViewedProfile()" title="Back">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h2>Edit Contact</h2>
+<span class="settings-icon-spacer"></span>
+</div>
+<div class="contact-edit-page-body">
+<div class="contact-edit-panel">
+<div class="contact-edit-grid">
+<label><span><i class="fa-solid fa-user"></i> First name</span><input id="contactFirstNameInput" type="text" placeholder="First name" /></label>
+<label><span><i class="fa-regular fa-user"></i> Last name</span><input id="contactLastNameInput" type="text" placeholder="Last name" /></label>
+<label><span><i class="fa-solid fa-address-book"></i> Contact</span><div class="contact-number-row"><input id="contactCountryInput" type="tel" placeholder="+91" /><input id="contactMobileInput" type="tel" placeholder="Contact number" /></div></label>
+</div>
+<div class="contact-edit-actions">
+<button class="ghost-btn" onclick="backToViewedProfile()">Cancel</button>
+<button class="primary-btn" onclick="saveEditedProfileContact()">Save contact</button>
+</div>
+</div>
+</div>
+</section>
+
+<section id="statusPage" class="page-section hidden">
+<div class="story-page-shell">
+<div class="story-topbar">
+<button class="story-icon-btn" onclick="showPage('chatPage')" title="Back"><i class="fa-solid fa-arrow-left"></i></button>
+<h2>Story</h2>
+<div class="story-title-actions">
+<button class="story-icon-btn" onclick="openStoryCamera()" title="Camera"><i class="fa-solid fa-camera"></i></button>
+<button class="story-icon-btn" onclick="openTextStoryPage()" title="Text"><i class="fa-solid fa-font"></i></button>
+<button class="story-icon-btn" onclick="openStoryMusicPicker()" title="Music"><i class="fa-solid fa-music"></i></button>
+</div>
+</div>
+<input id="storyCameraInput" class="hidden" type="file" accept="image/*,video/*" capture="environment" onchange="handleStoryCameraCapture(this)" />
+<input id="storyGalleryInput" class="hidden" type="file" accept="image/*,video/*" multiple onchange="handleStoryGallerySelection(this)" />
+<input id="storyMusicFileInput" class="hidden" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" onchange="handleStoryMusicSelection(this)" />
+<div class="story-bottom-tools">
+<button class="story-icon-btn" onclick="toggleStoryUpload()" title="Add story"><i class="fa-solid fa-plus"></i></button>
+<input id="storySearchInput" type="search" placeholder="Search stories" oninput="filterStories(this.value)" />
+<button class="story-icon-btn story-menu-btn" onclick="toggleStoryMenu()" title="Story menu"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+<div id="storyMenu" class="story-menu hidden">
+<button onclick="openStoryOption('privacy')"><i class="fa-solid fa-lock"></i><span>Status privacy</span></button>
+<button onclick="openStoryOption('schedule')"><i class="fa-solid fa-calendar-days"></i><span>Schedule status</span></button>
+<button onclick="openStoryOption('settings')"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+</div>
+</div>
+<div id="storyUploadPanel" class="card story-upload-card hidden">
+<div class="section-title">
+<h2>Add story</h2>
+<div class="status">24 hours</div>
+</div>
+<input id="storyFileInput" type="file" accept="image/*,video/*" />
+<textarea id="storyCaptionInput" placeholder="Write a story caption..."></textarea>
+<button class="primary-btn" onclick="uploadStory()">Upload story</button>
+<button class="ghost-btn story-live-btn" onclick="startLiveStory()"><i class="fa-solid fa-tower-broadcast"></i> Live story</button>
+<p id="storyMessage" class="form-message"></p>
+</div>
+<div id="storyCameraPanel" class="card story-camera-panel hidden">
+<div class="section-title">
+<h2>Camera</h2>
+<button class="ghost-btn small" onclick="closeStoryCameraPanel()">Close</button>
+</div>
+<div class="story-camera-grid">
+<div class="story-camera-preview">
+<video id="storyCameraPreview" autoplay muted playsinline></video>
+<button class="primary-btn" onclick="captureStoryCameraPhoto()"><i class="fa-solid fa-camera"></i> Capture photo</button>
+</div>
+<div class="story-gallery-side">
+<button class="story-picker-btn" onclick="openStoryGalleryPicker()"><i class="fa-solid fa-images"></i><span>Open gallery photos/videos</span></button>
+<div id="storyGalleryPreview" class="story-gallery-preview">
+<div class="empty-state compact">Choose photos or videos from gallery.</div>
+</div>
+</div>
+</div>
+<p id="storyCameraMessage" class="form-message"></p>
+</div>
+<div id="storyLivePanel" class="card story-live-panel hidden">
+<div class="section-title">
+<h2>Live story</h2>
+<div class="status live-status">Live</div>
+</div>
+<video id="storyLivePreview" autoplay muted playsinline></video>
+<button class="primary-btn danger-btn" onclick="endLiveStory()">End live and save</button>
+<p id="storyLiveMessage" class="form-message"></p>
+</div>
+<div id="storyOptionsPanel" class="story-options-panel hidden"></div>
+<div class="card story-list-card">
+<div class="section-title">
+<h2>Stories</h2>
+<div class="status">Live</div>
+</div>
+</div>
+<div id="storiesList" class="stories-list"></div>
+</div>
+</section>
+
+<section id="textStoryPage" class="page-section hidden">
+<div class="text-story-page">
+<div class="story-topbar">
+<button class="story-icon-btn" onclick="showPage('statusPage')" title="Back"><i class="fa-solid fa-arrow-left"></i></button>
+<h2>Text status</h2>
+</div>
+<div class="text-story-composer">
+<textarea id="textStoryPageInput" placeholder="Write whatever you want..."></textarea>
+<div class="text-story-tools">
+<div class="text-story-colors" aria-label="Text status background colors">
+<button type="button" class="active" style="background:#ffffff" onclick="selectTextStoryColor('#ffffff', this)" title="White"></button>
+<button type="button" style="background:#e0f2fe" onclick="selectTextStoryColor('#e0f2fe', this)" title="Blue"></button>
+<button type="button" style="background:#dcfce7" onclick="selectTextStoryColor('#dcfce7', this)" title="Green"></button>
+<button type="button" style="background:#fef3c7" onclick="selectTextStoryColor('#fef3c7', this)" title="Yellow"></button>
+<button type="button" style="background:#ffe4e6" onclick="selectTextStoryColor('#ffe4e6', this)" title="Pink"></button>
+<button type="button" style="background:#ede9fe" onclick="selectTextStoryColor('#ede9fe', this)" title="Purple"></button>
+<button type="button" style="background:#cbd5e1" onclick="selectTextStoryColor('#cbd5e1', this)" title="Ash"></button>
+<label class="text-story-color-mix" title="Choose custom color">
+<input id="textStoryCustomColorInput" type="color" value="#ffffff" onchange="selectCustomTextStoryColor(this.value)" />
+<span><i class="fa-solid fa-palette"></i></span>
+</label>
+</div>
+<button type="button" class="story-picker-btn text-story-music-btn" onclick="openTextStoryMusicPicker()"><i class="fa-solid fa-music"></i><span id="textStoryMusicLabel">Add music</span></button>
+</div>
+<button class="primary-btn" onclick="postTextStory()">Post status</button>
+<p id="textStoryMessage" class="form-message"></p>
+</div>
+</div>
+</section>
+
+<section id="friendsPage" class="page-section hidden">
+<div class="profile-grid">
+<div class="card">
+<div class="section-title">
+<h2>Create Group</h2>
+<div class="status">Friends</div>
+</div>
+<div class="group-create-panel">
+<div class="group-name-row">
+<input id="friendGroupNameInput" type="text" placeholder="Group name" />
+<button type="button" class="group-plus-btn" onclick="toggleGroupContactPicker()" title="Add members">
+<i class="fa-solid fa-plus"></i>
+</button>
+</div>
+<div id="friendGroupPicker" class="group-friend-picker hidden"></div>
+<button class="primary-btn" onclick="createFriendGroup()">Create group</button>
+<p id="friendGroupMessage" class="form-message"></p>
+</div>
+</div>
+<div class="card">
+<div class="section-title">
+<h2>My Groups</h2>
+<div class="status">Chat</div>
+</div>
+<div id="friendGroupsList" class="users-list"></div>
+</div>
+<div class="card">
+<div class="section-title">
+<h2>Phone Contacts</h2>
+<div class="status">Permission</div>
+</div>
+<button class="primary-btn" onclick="requestContactsPermission()">Allow contacts</button>
+<p id="contactsMessage" class="form-message"></p>
+<div id="contactMatchesList" class="users-list"></div>
+</div>
+<div class="card">
+<div class="section-title">
+<h2>Friend Requests</h2>
+<div class="status">Requests</div>
+</div>
+<div id="friendRequestsList" class="users-list"></div>
+</div>
+<div class="card">
+<div class="section-title">
+<h2>Friends</h2>
+<div class="status">People</div>
+</div>
+<div id="friendsList" class="users-list"></div>
+</div>
+<div class="card">
+<div class="section-title">
+<h2>Followers</h2>
+<div class="status">Social</div>
+</div>
+<div id="followersList" class="users-list"></div>
+</div>
+</div>
+</section>
+
+<section id="searchPage" class="page-section hidden">
+<div class="card">
+<div class="section-title">
+<h2>Search</h2>
+<div class="status">Users Groups Content Chats</div>
+</div>
+<div class="search-large">
+<input id="searchPageInput" type="text" placeholder="Search users, groups, content, chats..." oninput="runSearch(this.value)" />
+</div>
+<div id="searchResults" class="search-results"></div>
+</div>
+</section>
+
+<section id="settingsPage" class="page-section hidden">
+<div class="settings-topbar">
+<button type="button" class="settings-icon-btn" onclick="showPage('chatPage')" title="Back">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h2>Settings</h2>
+<button type="button" class="settings-icon-btn" onclick="showPage('searchPage')" title="Search">
+<i class="fa-solid fa-magnifying-glass"></i>
+</button>
+</div>
+<div class="settings-layout">
+<div class="card settings-card settings-preferences-card">
+<div class="section-title">
+<h2><i class="fa-solid fa-sliders"></i> Appearance</h2>
+<div class="status">Saved</div>
+</div>
+<label class="setting-row">
+<span>Dark mode</span>
+<input id="darkModeToggle" type="checkbox" onchange="saveSettings()" />
+</label>
+<label class="setting-row">
+<span>Theme</span>
+<select id="themeSelect" onchange="saveSettings()">
+<option value="default">Default</option>
+<option value="ocean">Ocean</option>
+<option value="rose">Rose</option>
+<option value="forest">Forest</option>
+<option value="gallery">Choose from gallery</option>
+</select>
+<input id="themeGalleryInput" class="hidden" type="file" accept="image/*" onchange="saveGalleryTheme()" />
+</label>
+<label class="setting-row">
+<span>Language</span>
+<select id="settingsLanguageSelect" onchange="saveLanguage(this.value)">
+<option>English</option>
+<option>Assamese</option>
+<option>Bengali</option>
+<option>Bodo</option>
+<option>Dogri</option>
+<option>Gujarati</option>
+<option>Hindi</option>
+<option>Kannada</option>
+<option>Kashmiri</option>
+<option>Konkani</option>
+<option>Maithili</option>
+<option>Malayalam</option>
+<option>Manipuri</option>
+<option>Marathi</option>
+<option>Nepali</option>
+<option>Odia</option>
+<option>Punjabi</option>
+<option>Sanskrit</option>
+<option>Santali</option>
+<option>Sindhi</option>
+<option>Tamil</option>
+<option>Telugu</option>
+<option>Urdu</option>
+</select>
+</label>
+</div>
+
+<div class="card settings-card settings-connection-card">
+<div class="section-title">
+<h2><i class="fa-solid fa-wifi"></i> Connection</h2>
+<div id="settingsBackendStatus" class="status">Checking</div>
+</div>
+<label class="settings-field">
+Backend URL
+<input id="settingsApiBaseInput" type="url" placeholder="http://localhost:5000" />
+</label>
+<div class="settings-actions">
+<button class="primary-btn" onclick="saveApiBaseFromSettings()">Save URL</button>
+<button class="ghost-btn" onclick="checkBackendFromSettings()">Test backend</button>
+</div>
+<div id="settingsConnectionResult" class="settings-result"></div>
+</div>
+
+<div id="settingsNotificationsCard" class="card settings-card settings-cloud-card">
+<div class="section-title">
+<h2><i class="fa-solid fa-bell"></i> Cloud & Push</h2>
+<div id="settingsCloudStatus" class="status">Status</div>
+</div>
+<div class="settings-actions">
+<button class="primary-btn" onclick="refreshSettingsStatus()">Refresh status</button>
+<button class="ghost-btn" onclick="requestBrowserNotifications()">Allow browser alerts</button>
+</div>
+<div id="settingsStorageStatus" class="settings-result"></div>
+<div id="settingsPushStatus" class="settings-result"></div>
+</div>
+
+<div id="settingsPrivacyCard" class="card settings-card settings-security-card">
+<div class="section-title">
+<h2><i class="fa-solid fa-shield-halved"></i> Privacy & Security</h2>
+<div class="status">Protected</div>
+</div>
+<label class="setting-row">
+<span>Profile visibility</span>
+<select id="profileVisibilitySelect">
+<option value="everyone">Everyone</option>
+<option value="friends">Friends</option>
+<option value="private">Private</option>
+</select>
+</label>
+<label class="setting-row">
+<span>Show online status</span>
+<input id="showOnlineStatusToggle" type="checkbox" checked />
+</label>
+<label class="setting-row">
+<span>Messages from</span>
+<select id="allowMessagesSelect">
+<option value="everyone">Everyone</option>
+<option value="friends">Friends</option>
+<option value="nobody">Nobody</option>
+</select>
+</label>
+<label class="setting-row">
+<span>Two-factor authentication</span>
+<input id="twoFactorToggle" type="checkbox" />
+</label>
+<label class="setting-row">
+<span>2FA delivery</span>
+<select id="twoFactorMethodSelect">
+<option value="email">Email</option>
+<option value="phone">Phone</option>
+</select>
+</label>
+<div class="settings-actions">
+<button class="primary-btn" onclick="savePrivacySecurity()">Save protection</button>
+</div>
+<div id="settingsSecurityResult" class="settings-result"></div>
+</div>
+
+<div id="settingsBackupCard" class="card settings-card settings-backup-card">
+<div class="section-title">
+<h2><i class="fa-solid fa-cloud-arrow-up"></i> Cloud Backup</h2>
+<div class="status">Chats & Settings</div>
+</div>
+<div class="settings-actions">
+<button class="primary-btn" onclick="createCloudBackup()">Back up now</button>
+<button class="ghost-btn" onclick="restoreCloudBackup()">Restore settings</button>
+</div>
+<div id="settingsBackupResult" class="settings-result"></div>
+</div>
+
+<div id="settingsMonitoringCard" class="card settings-card settings-monitoring-card">
+<div class="section-title">
+<h2><i class="fa-solid fa-chart-line"></i> Monitoring</h2>
+<div id="monitoringStatus" class="status">Checking</div>
+</div>
+<button class="ghost-btn" onclick="loadMonitoring()">Refresh monitoring</button>
+<div id="settingsMonitoringResult" class="settings-result"></div>
+</div>
+
+<div class="card settings-card settings-data-card">
+<div class="section-title">
+<h2><i class="fa-solid fa-database"></i> App Data</h2>
+<div class="status">Local</div>
+</div>
+<div id="settingsLocalData" class="settings-result"></div>
+<div class="settings-actions">
+<button class="ghost-btn" onclick="exportLocalData()">Export data</button>
+<button class="settings-danger" onclick="clearLocalAppData()">Clear local data</button>
+</div>
+</div>
+</div>
+</section>
+
+<section id="aiPage" class="page-section hidden">
+<div class="profile-grid">
+<div class="card">
+<div class="section-title">
+<h2>AI Recommendations</h2>
+<div class="status">Smart</div>
+</div>
+<button class="primary-btn" onclick="loadAiRecommendations()">Refresh recommendations</button>
+<div id="aiRecommendations" class="ai-results"></div>
+</div>
+<div class="card">
+<div class="section-title">
+<h2>AI Tools</h2>
+<div class="status">Moderate Translate Caption</div>
+</div>
+<textarea id="aiTextInput" placeholder="Type text for moderation or translation..."></textarea>
+<div class="tool-row">
+<button class="primary-btn" onclick="moderateAiText()">Moderate</button>
+<select id="aiLanguageSelect">
+<option>Telugu</option>
+<option>Hindi</option>
+<option>Tamil</option>
+<option>English</option>
+</select>
+<button class="primary-btn" onclick="translateAiText()">Translate</button>
+</div>
+<input id="aiCaptionInput" type="file" accept="image/*,video/*" />
+<button class="primary-btn" onclick="captionAiMedia()">Generate caption</button>
+<div id="aiToolResult" class="ai-results"></div>
+</div>
+<div class="card">
+<div class="section-title">
+<h2>Cloud Storage</h2>
+<div class="status">Cloudinary Firebase S3</div>
+</div>
+<button class="primary-btn" onclick="loadStorageStatus()">Check storage</button>
+<div id="storageStatus" class="ai-results"></div>
+</div>
+</div>
+</section>
+
+<section id="onlinePage" class="page-section hidden">
+<div class="friends-posts-screen">
+<div class="friends-posts-topbar">
+<button type="button" class="friends-posts-icon-btn" onclick="showPage('chatPage')" title="Back to main page">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h2 id="friendsPostsUsername" class="username-title">Username</h2>
+<div class="friends-posts-actions">
+<button type="button" class="friends-posts-icon-btn friends-posts-create-btn" onclick="toggleFriendsPostCreateMenu()" title="Create post or reel">
+<i class="fa-solid fa-plus"></i>
+</button>
+<button type="button" class="friends-posts-icon-btn friends-posts-notification-btn" onclick="toggleFriendsPostsNotifications()" title="Notifications">
+<i class="fa-solid fa-bell"></i>
+<span id="friendsNotificationBadge" class="notification-badge hidden">0</span>
+</button>
+<button type="button" class="friends-posts-icon-btn friends-posts-menu-btn" onclick="toggleFriendsPostsMenu()" title="Menu">
+<i class="fa-solid fa-ellipsis-vertical"></i>
+</button>
+</div>
+</div>
+<div class="friends-my-profile">
+<button type="button" class="friends-my-profile-avatar" onclick="showPage('profilePage')" title="Open my profile">
+<img id="friendsPostsProfilePhoto" class="hidden" alt="My profile photo" />
+<span id="friendsPostsProfileFallback">S</span>
+</button>
+</div>
+<div id="friendsPostCreateMenu" class="friends-posts-menu hidden">
+<button type="button" onclick="openPostsGalleryUpload()"><i class="fa-solid fa-images"></i><span>Post from gallery</span></button>
+<button type="button" onclick="openReelsGalleryUpload()"><i class="fa-solid fa-film"></i><span>Reel from gallery</span></button>
+<button type="button" onclick="openFriendsLiveCamera()"><i class="fa-solid fa-camera"></i><span>Live camera</span></button>
+</div>
+<div id="friendsPostsMenu" class="friends-posts-menu right hidden">
+<button type="button" onclick="loadPosts(); toggleFriendsPostsMenu(true);"><i class="fa-solid fa-rotate"></i><span>Refresh posts</span></button>
+<button type="button" onclick="showPage('profilePage')"><i class="fa-solid fa-user"></i><span>My profile</span></button>
+<button type="button" onclick="showPage('settingsPage')"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+</div>
+<div id="friendsPostsNotificationsPanel" class="notification-panel friends-posts-notification-panel hidden">
+<div class="section-title">
+<h2>Notifications</h2>
+<button class="ghost-btn small" onclick="markNotificationsRead()">Read</button>
+</div>
+<div id="friendsNotificationList" class="notification-list"></div>
+</div>
+<div id="friendsPostsFeed" class="posts-feed"></div>
+</div>
+</section>
+
+<section id="callsPage" class="page-section hidden">
+<div class="calls-screen">
+<div class="calls-topbar">
+<button type="button" class="calls-icon-btn" onclick="showPage('chatPage')" title="Back">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h2>Calls</h2>
+</div>
+<div class="calls-search-tools">
+<input id="callsSearchInput" type="search" placeholder="Search calls" oninput="filterCallsPage(this.value)" />
+<button type="button" class="calls-icon-btn calls-menu-btn" onclick="toggleCallsMenu()" title="Menu">
+<i class="fa-solid fa-ellipsis-vertical"></i>
+</button>
+<div class="calls-menu hidden" id="callsMenu">
+<button onclick="clearCallLog()"><i class="fa-solid fa-trash"></i><span>Clear calls log</span></button>
+<button onclick="scheduleCall()"><i class="fa-solid fa-calendar-plus"></i><span>Schedule calls</span></button>
+<button onclick="showPage('profilePage')"><i class="fa-solid fa-user"></i><span>Profile</span></button>
+</div>
+</div>
+
+<div class="calls-quick-actions">
+<button type="button" onclick="startQuickCall('voice')">
+<i class="fa-solid fa-phone"></i>
+<span>Call</span>
+</button>
+<button type="button" onclick="openDialerPad()">
+<span class="dialer-dots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+<span>Dialer</span>
+</button>
+<button type="button" onclick="showFavoriteContacts()">
+<i class="fa-solid fa-star"></i>
+<span>Favorites</span>
+</button>
+</div>
+
+<div id="dialerPanel" class="dialer-panel hidden">
+<input id="dialerNumber" type="tel" placeholder="Enter number" />
+<div class="dialer-grid">
+<button onclick="appendDialer('1')">1</button><button onclick="appendDialer('2')">2</button><button onclick="appendDialer('3')">3</button>
+<button onclick="appendDialer('4')">4</button><button onclick="appendDialer('5')">5</button><button onclick="appendDialer('6')">6</button>
+<button onclick="appendDialer('7')">7</button><button onclick="appendDialer('8')">8</button><button onclick="appendDialer('9')">9</button>
+<button onclick="appendDialer('*')">*</button><button onclick="appendDialer('0')">0</button><button onclick="appendDialer('#')">#</button>
+</div>
+<button class="primary-btn" onclick="startDialerCall()">Call number</button>
+</div>
+
+<div class="calls-section call-history-section">
+<div class="section-title">
+<h2>Call History</h2>
+<div class="status">Recent</div>
+</div>
+<div id="callHistoryList" class="calls-list"></div>
+</div>
+</div>
+</section>
+
+<section id="advancedPage" class="page-section hidden">
+<div class="advanced-grid">
+<div class="card">
+<div class="section-title">
+<h2>Explore</h2>
+<div class="status">Trending</div>
+</div>
+<button class="primary-btn" onclick="loadExplore()">Refresh explore</button>
+<div id="advancedExplore" class="advanced-results"></div>
+</div>
+
+<div class="card">
+<div class="section-title">
+<h2>Groups</h2>
+<div class="status">Chat</div>
+</div>
+<input id="groupNameInput" placeholder="Group name" />
+<input id="groupMembersInput" placeholder="Members usernames, comma separated" />
+<button class="primary-btn" onclick="createGroup()">Create group</button>
+<div id="groupsList" class="advanced-results"></div>
+</div>
+
+<div class="card">
+<div class="section-title">
+<h2>Safety</h2>
+<div class="status">Reports</div>
+</div>
+<input id="safetyUserInput" placeholder="Username to block or report" />
+<textarea id="reportReasonInput" placeholder="Report reason"></textarea>
+<div class="settings-actions">
+<button class="primary-btn" onclick="blockAdvancedUser()">Block</button>
+<button class="ghost-btn" onclick="unblockAdvancedUser()">Unblock</button>
+<button class="settings-danger" onclick="reportAdvancedUser()">Report</button>
+</div>
+<div id="safetyResult" class="advanced-results"></div>
+</div>
+
+<div class="card">
+<div class="section-title">
+<h2>Admin</h2>
+<div class="status">Dashboard</div>
+</div>
+<button class="primary-btn" onclick="loadAdvancedAnalytics()">Refresh dashboard</button>
+<div id="advancedAnalytics" class="advanced-results"></div>
+<div id="reportsList" class="advanced-results"></div>
+</div>
+
+<div class="card">
+<div class="section-title">
+<h2>Creator Tools</h2>
+<div class="status">Prepared</div>
+</div>
+<div class="advanced-feature-list">
+<div><strong>Live streaming</strong><small>UI prepared. Needs live video provider.</small></div>
+<div><strong>Wallet</strong><small>Creator tips need payment gateway account.</small></div>
+<div><strong>Verification badge</strong><small>Admin can verify users from backend.</small></div>
+<div><strong>Offline mode</strong><small>Prepared for next native storage step.</small></div>
+</div>
+</div>
+</div>
+</section>
+</main>
+</div>
+
+<nav class="mobile-nav">
+<button onclick="showPage('chatPage')" title="Chats">
+<i class="fa-solid fa-comments"></i>
+</button>
+<button onclick="showPage('homePage')" title="Reels">
+<i class="fa-solid fa-play"></i>
+</button>
+<button onclick="showPage('statusPage')" title="Status">
+<i class="fa-solid fa-circle-dot"></i>
+</button>
+<button onclick="showPage('callsPage')" title="Calls">
+<i class="fa-solid fa-phone"></i>
+</button>
+<button onclick="showPage('onlinePage')" title="Posts">
+<i class="fa-solid fa-newspaper"></i>
+</button>
+</nav>
+
+<script src="config.js"></script>
+<script src="socket.io.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

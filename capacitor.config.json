@@ -1,0 +1,12 @@
+{
+  "appId": "com.shashi.app",
+  "appName": "SHASHI",
+  "webDir": "shashi-app-social-run/frontend",
+  "server": {
+    "cleartext": true,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

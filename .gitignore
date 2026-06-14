@@ -1,0 +1,15 @@
+node_modules/
+shashi-app-social-run/backend/node_modules/
+shashi-app-social-run/backend/.env
+shashi-app-social-run/backend/.env.*
+!shashi-app-social-run/backend/.env.example
+shashi-app-social-run/backend/secrets/
+android/app/google-services.json
+android/.gradle/
+android/app/build/
+android/build/
+gradle-*/
+.appdata/
+.localappdata/
+.xdg-data/
+*.log
