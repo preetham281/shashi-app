@@ -96,6 +96,17 @@ let selectedTextStoryColor = '#ffffff';
 let liveStoryState = { active:false, stream:null, recorder:null, chunks:[], startedAt:null, url:'' };
 let storyCameraStream = null;
 let callPermissionState = { audio: 'unknown', video: 'unknown' };
+let activeCall = null;
+let localCallStream = null;
+let remoteCallStream = null;
+let callPeerConnection = null;
+let pendingCallIceCandidates = [];
+const callPeerConfig = {
+iceServers: [
+{ urls: 'stun:stun.l.google.com:19302' },
+{ urls: 'stun:stun1.l.google.com:19302' }
+]
+};
 let mutedChats = JSON.parse(localStorage.getItem('shashiMutedChats') || '[]');
 let userAccountReturnPage = 'profilePage';
 let currentConversationMessages = [];
@@ -703,26 +714,105 @@ list.innerHTML = items.length
 
 async function startFriendCall(name, type){
 try{
-await requestMediaPermissions(type === 'video');
-addCallHistory(name, type);
-alert(`${type === 'video' ? 'Video' : 'Voice'} call ready with ${name}.`);
+const peerName = String(name || '').trim();
+if(!currentUser){
+alert('Please login before starting a call.');
+return;
+}
+if(!peerName || peerName === currentUser.username){
+alert('Please select a friend to call.');
+return;
+}
+if(String(peerName).startsWith('group:')){
+alert('Group calling will be added later.');
+return;
+}
+if(!socket || !socket.connected){
+alert('Backend live connection is offline. Please refresh after backend is online.');
+return;
+}
+if(!canUseWebRTC()){
+alert('This browser does not support live calling. Please use Chrome, Edge, or the Android app.');
+return;
+}
+if(activeCall){
+alert('A call is already running.');
+return;
+}
+
+const callType = type === 'video' ? 'video' : 'voice';
+localCallStream = await getLiveCallStream(callType === 'video');
+activeCall = {
+callId: createCallId(),
+peer: peerName,
+type: callType,
+role: 'caller',
+status: 'calling',
+startedAt: new Date().toISOString()
+};
+callPeerConnection = createCallPeerConnection();
+localCallStream.getTracks().forEach((track) => callPeerConnection.addTrack(track, localCallStream));
+showCallOverlay();
+addCallHistory(peerName, callType);
+socket.emit('call_invite', callSignalPayload());
+const offer = await callPeerConnection.createOffer({
+offerToReceiveAudio: true,
+offerToReceiveVideo: callType === 'video'
+});
+await callPeerConnection.setLocalDescription(offer);
+socket.emit('call_offer', {
+...callSignalPayload(),
+offer: callPeerConnection.localDescription
+});
+setCallStatus('Ringing...');
 }catch(error){
-alert(`${type === 'video' ? 'Camera/mic' : 'Microphone'} permission denied.`);
+console.error(error);
+cleanupCall(false);
+alert(`${type === 'video' ? 'Camera/mic' : 'Microphone'} permission denied or call could not start.`);
 }
 }
 
-async function requestMediaPermissions(includeVideo){
-if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+function canUseWebRTC(){
+return Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection);
+}
+
+function createCallId(){
+return `call_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function callSignalPayload(){
+if(!activeCall) return {};
+return {
+callId: activeCall.callId,
+target: activeCall.peer,
+recipient: activeCall.peer,
+callType: activeCall.type
+};
+}
+
+async function getLiveCallStream(includeVideo){
+if(!canUseWebRTC()){
 throw new Error('Calling permissions are not supported on this browser.');
 }
 
 const stream = await navigator.mediaDevices.getUserMedia({
-audio:true,
-video:Boolean(includeVideo)
+audio: true,
+video: Boolean(includeVideo)
 });
 
 callPermissionState.audio = 'granted';
 callPermissionState.video = includeVideo ? 'granted' : callPermissionState.video;
+updateChatCallPermissionView();
+return stream;
+}
+
+async function requestMediaPermissions(includeVideo){
+if(!canUseWebRTC()){
+throw new Error('Calling permissions are not supported on this browser.');
+}
+
+const stream = await getLiveCallStream(includeVideo);
+
 stream.getTracks().forEach((track) => track.stop());
 updateChatCallPermissionView();
 return true;
@@ -737,6 +827,330 @@ callPermissionState.video = 'denied';
 updateChatCallPermissionView();
 alert('Please allow microphone and camera permissions for calls.');
 }
+}
+
+function createCallPeerConnection(){
+const pc = new RTCPeerConnection(callPeerConfig);
+pc.onicecandidate = (event) => {
+if(event.candidate && socket && activeCall){
+socket.emit('call_ice_candidate', {
+...callSignalPayload(),
+candidate: event.candidate
+});
+}
+};
+pc.ontrack = (event) => {
+if(event.streams && event.streams[0]){
+remoteCallStream = event.streams[0];
+}else{
+if(!remoteCallStream) remoteCallStream = new MediaStream();
+remoteCallStream.addTrack(event.track);
+}
+setVideoSource('remoteCallVideo', remoteCallStream);
+updateCallOverlay();
+};
+pc.onconnectionstatechange = () => {
+if(!activeCall) return;
+const state = pc.connectionState;
+if(state === 'connected'){
+activeCall.status = 'connected';
+setCallStatus('Connected');
+}
+if(state === 'failed' || state === 'disconnected'){
+setCallStatus('Trying to reconnect...');
+}
+if(state === 'closed'){
+setCallStatus('Call ended');
+}
+};
+return pc;
+}
+
+function setVideoSource(id, stream){
+const video = byId(id);
+if(video && video.srcObject !== stream){
+video.srcObject = stream || null;
+}
+}
+
+function showIncomingCall(call){
+const toast = byId('incomingCallToast');
+if(!toast) return;
+const peerName = call.peer || 'Friend';
+byId('incomingCallName').innerText = peerName;
+byId('incomingCallType').innerText = call.type === 'video' ? 'Incoming video call' : 'Incoming voice call';
+byId('incomingCallAvatar').innerText = peerName.charAt(0).toUpperCase();
+toast.classList.remove('hidden');
+}
+
+function hideIncomingCall(){
+const toast = byId('incomingCallToast');
+if(toast) toast.classList.add('hidden');
+}
+
+function showCallOverlay(){
+const overlay = byId('callOverlay');
+if(overlay) overlay.classList.remove('hidden');
+setVideoSource('localCallVideo', localCallStream);
+setVideoSource('remoteCallVideo', remoteCallStream);
+updateCallOverlay();
+}
+
+function updateCallOverlay(){
+if(!activeCall) return;
+const peerName = activeCall.peer || 'Friend';
+const title = byId('callTitle');
+const voiceAvatar = byId('voiceCallAvatar');
+const voiceInitial = byId('voiceCallInitial');
+const localVideo = byId('localCallVideo');
+const remoteVideo = byId('remoteCallVideo');
+const cameraBtn = byId('cameraCallBtn');
+if(title) title.innerText = `${activeCall.type === 'video' ? 'Video' : 'Voice'} call with ${peerName}`;
+if(voiceInitial) voiceInitial.innerText = peerName.charAt(0).toUpperCase();
+if(voiceAvatar) voiceAvatar.style.display = activeCall.type === 'video' && remoteCallStream ? 'none' : 'grid';
+if(localVideo) localVideo.style.display = activeCall.type === 'video' && localCallStream ? 'block' : 'none';
+if(remoteVideo) remoteVideo.style.display = activeCall.type === 'video' && remoteCallStream ? 'block' : 'none';
+if(cameraBtn) cameraBtn.style.display = activeCall.type === 'video' ? 'grid' : 'none';
+setCallStatus(callStatusText());
+}
+
+function callStatusText(){
+if(!activeCall) return '';
+if(activeCall.status === 'incoming') return 'Incoming call';
+if(activeCall.status === 'calling') return 'Calling...';
+if(activeCall.status === 'accepted') return 'Connecting...';
+if(activeCall.status === 'connected') return 'Connected';
+if(activeCall.status === 'rejected') return 'Call rejected';
+return 'Connecting...';
+}
+
+function setCallStatus(text){
+const status = byId('callStatus');
+if(status) status.innerText = text;
+}
+
+function cleanupCall(notifyPeer = true){
+if(notifyPeer && activeCall && socket){
+socket.emit('call_end', callSignalPayload());
+}
+if(callPeerConnection){
+callPeerConnection.onicecandidate = null;
+callPeerConnection.ontrack = null;
+callPeerConnection.onconnectionstatechange = null;
+callPeerConnection.close();
+}
+if(localCallStream){
+localCallStream.getTracks().forEach((track) => track.stop());
+}
+if(remoteCallStream){
+remoteCallStream.getTracks().forEach((track) => track.stop());
+}
+setVideoSource('localCallVideo', null);
+setVideoSource('remoteCallVideo', null);
+const overlay = byId('callOverlay');
+if(overlay) overlay.classList.add('hidden');
+hideIncomingCall();
+activeCall = null;
+localCallStream = null;
+remoteCallStream = null;
+callPeerConnection = null;
+pendingCallIceCandidates = [];
+resetCallControlButtons();
+}
+
+function resetCallControlButtons(){
+const muteBtn = byId('muteCallBtn');
+const cameraBtn = byId('cameraCallBtn');
+if(muteBtn) muteBtn.classList.remove('active-off');
+if(cameraBtn) cameraBtn.classList.remove('active-off');
+}
+
+async function acceptIncomingCall(){
+if(!activeCall || activeCall.role !== 'receiver') return;
+try{
+hideIncomingCall();
+activeCall.status = 'accepted';
+localCallStream = await getLiveCallStream(activeCall.type === 'video');
+callPeerConnection = createCallPeerConnection();
+localCallStream.getTracks().forEach((track) => callPeerConnection.addTrack(track, localCallStream));
+showCallOverlay();
+if(socket) socket.emit('call_answer', callSignalPayload());
+await answerIncomingOffer();
+addCallHistory(activeCall.peer, activeCall.type);
+}catch(error){
+console.error(error);
+if(socket && activeCall){
+socket.emit('call_reject', {
+...callSignalPayload(),
+reason: 'permission denied'
+});
+}
+cleanupCall(false);
+alert('Please allow microphone and camera permissions for calls.');
+}
+}
+
+function rejectIncomingCall(){
+if(activeCall && socket){
+socket.emit('call_reject', {
+...callSignalPayload(),
+reason: 'rejected'
+});
+}
+cleanupCall(false);
+}
+
+function endActiveCall(){
+cleanupCall(true);
+}
+
+function toggleCallMute(){
+if(!localCallStream) return;
+const audioTracks = localCallStream.getAudioTracks();
+audioTracks.forEach((track) => {
+track.enabled = !track.enabled;
+});
+const muted = audioTracks.length > 0 && audioTracks.every((track) => !track.enabled);
+const btn = byId('muteCallBtn');
+if(btn) btn.classList.toggle('active-off', muted);
+}
+
+function toggleCallCamera(){
+if(!localCallStream) return;
+const videoTracks = localCallStream.getVideoTracks();
+videoTracks.forEach((track) => {
+track.enabled = !track.enabled;
+});
+const off = videoTracks.length > 0 && videoTracks.every((track) => !track.enabled);
+const btn = byId('cameraCallBtn');
+if(btn) btn.classList.toggle('active-off', off);
+}
+
+async function answerIncomingOffer(){
+if(!activeCall || !callPeerConnection || !activeCall.incomingOffer) return;
+await callPeerConnection.setRemoteDescription(activeCall.incomingOffer);
+await flushPendingCallIceCandidates();
+const answer = await callPeerConnection.createAnswer();
+await callPeerConnection.setLocalDescription(answer);
+if(socket){
+socket.emit('call_answer_sdp', {
+...callSignalPayload(),
+answer: callPeerConnection.localDescription
+});
+}
+activeCall.status = 'connected';
+setCallStatus('Connected');
+}
+
+async function flushPendingCallIceCandidates(){
+if(!callPeerConnection || !callPeerConnection.remoteDescription) return;
+const queued = [...pendingCallIceCandidates];
+pendingCallIceCandidates = [];
+for(const candidate of queued){
+try{
+await callPeerConnection.addIceCandidate(candidate);
+}catch(error){
+console.warn('Could not add queued call candidate', error);
+}
+}
+}
+
+function callSignalIsForMe(data){
+return Boolean(currentUser && data && data.target === currentUser.username && data.sender !== currentUser.username);
+}
+
+function callSignalMatchesActive(data){
+return Boolean(activeCall && data && data.callId === activeCall.callId && data.sender === activeCall.peer);
+}
+
+function handleIncomingCallSignal(data){
+if(!callSignalIsForMe(data)) return;
+if(activeCall && activeCall.callId !== data.callId){
+if(socket){
+socket.emit('call_reject', {
+callId: data.callId,
+target: data.sender,
+recipient: data.sender,
+callType: data.callType || 'voice',
+reason: 'busy'
+});
+}
+return;
+}
+activeCall = {
+callId: data.callId,
+peer: data.sender,
+type: data.callType === 'video' ? 'video' : 'voice',
+role: 'receiver',
+status: 'incoming',
+incomingOffer: activeCall && activeCall.incomingOffer ? activeCall.incomingOffer : null,
+startedAt: data.startedAt || new Date().toISOString()
+};
+showIncomingCall(activeCall);
+}
+
+function handleCallOfferSignal(data){
+if(!callSignalIsForMe(data) || !data.offer) return;
+if(!activeCall){
+activeCall = {
+callId: data.callId,
+peer: data.sender,
+type: data.callType === 'video' ? 'video' : 'voice',
+role: 'receiver',
+status: 'incoming',
+incomingOffer: data.offer,
+startedAt: new Date().toISOString()
+};
+showIncomingCall(activeCall);
+return;
+}
+if(!callSignalMatchesActive(data)) return;
+activeCall.incomingOffer = data.offer;
+if(activeCall.status === 'accepted'){
+answerIncomingOffer().catch((error) => {
+console.error(error);
+cleanupCall(true);
+});
+}
+}
+
+async function handleCallAnswerSignal(data){
+if(!callSignalIsForMe(data) || !callSignalMatchesActive(data) || !data.answer || !callPeerConnection) return;
+try{
+await callPeerConnection.setRemoteDescription(data.answer);
+await flushPendingCallIceCandidates();
+activeCall.status = 'connected';
+setCallStatus('Connected');
+}catch(error){
+console.error(error);
+setCallStatus('Connection failed');
+}
+}
+
+async function handleCallIceCandidateSignal(data){
+if(!callSignalIsForMe(data) || !data.candidate) return;
+if(!activeCall || data.callId !== activeCall.callId) return;
+const candidate = data.candidate;
+if(callPeerConnection && callPeerConnection.remoteDescription){
+try{
+await callPeerConnection.addIceCandidate(candidate);
+}catch(error){
+console.warn('Could not add call candidate', error);
+}
+return;
+}
+pendingCallIceCandidates.push(candidate);
+}
+
+function handleCallRejectedSignal(data){
+if(!callSignalIsForMe(data) || !callSignalMatchesActive(data)) return;
+alert(`${activeCall.peer} rejected the call.`);
+cleanupCall(false);
+}
+
+function handleCallEndedSignal(data){
+if(!callSignalIsForMe(data) || !callSignalMatchesActive(data)) return;
+cleanupCall(false);
 }
 
 function updateChatCallPermissionView(){
@@ -4359,6 +4773,22 @@ if(currentUser && delivered.sender === currentUser.username){
 updateLocalMessageStatus(delivered.messageId, 'delivered', delivered.receiver);
 }
 });
+
+socket.on('incoming_call', handleIncomingCallSignal);
+socket.on('call_offer', handleCallOfferSignal);
+socket.on('call_answered', (data)=>{
+if(callSignalIsForMe(data) && callSignalMatchesActive(data)){
+setCallStatus('Connecting...');
+}
+});
+socket.on('call_answer_sdp', (data)=>{
+handleCallAnswerSignal(data);
+});
+socket.on('call_ice_candidate', (data)=>{
+handleCallIceCandidateSignal(data);
+});
+socket.on('call_rejected', handleCallRejectedSignal);
+socket.on('call_ended', handleCallEndedSignal);
 
 socket.on('game_action', applyChatGameSocket);
 

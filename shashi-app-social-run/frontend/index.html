@@ -1173,6 +1173,52 @@ Backend URL
 </button>
 </nav>
 
+<div id="incomingCallToast" class="incoming-call-toast hidden">
+<div class="incoming-call-avatar" id="incomingCallAvatar">S</div>
+<div class="incoming-call-copy">
+<strong id="incomingCallName">Incoming call</strong>
+<small id="incomingCallType">Video call</small>
+</div>
+<button type="button" class="incoming-call-accept" onclick="acceptIncomingCall()" title="Accept call">
+<i class="fa-solid fa-phone"></i>
+</button>
+<button type="button" class="incoming-call-reject" onclick="rejectIncomingCall()" title="Reject call">
+<i class="fa-solid fa-phone-slash"></i>
+</button>
+</div>
+
+<div id="callOverlay" class="call-overlay hidden">
+<div class="call-panel">
+<div class="call-panel-header">
+<div>
+<strong id="callTitle">Call</strong>
+<small id="callStatus">Connecting...</small>
+</div>
+<button type="button" onclick="endActiveCall()" title="End call">
+<i class="fa-solid fa-phone-slash"></i>
+</button>
+</div>
+<div class="call-video-stage">
+<video id="remoteCallVideo" autoplay playsinline></video>
+<div id="voiceCallAvatar" class="voice-call-avatar">
+<span id="voiceCallInitial">S</span>
+</div>
+<video id="localCallVideo" autoplay playsinline muted></video>
+</div>
+<div class="call-control-row">
+<button type="button" id="muteCallBtn" onclick="toggleCallMute()" title="Mute microphone">
+<i class="fa-solid fa-microphone"></i>
+</button>
+<button type="button" id="cameraCallBtn" onclick="toggleCallCamera()" title="Turn camera on or off">
+<i class="fa-solid fa-video"></i>
+</button>
+<button type="button" class="end-call-btn" onclick="endActiveCall()" title="End call">
+<i class="fa-solid fa-phone-slash"></i>
+</button>
+</div>
+</div>
+</div>
+
 <script src="config.js"></script>
 <script src="socket.io.min.js"></script>
 <script src="app.js"></script>

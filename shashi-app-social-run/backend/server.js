@@ -47,6 +47,7 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://127.0.0.1:5000,http
   .filter(Boolean);
 const allowedSocketGameIds = new Set(['ticTacToe', 'chess', 'checkers', 'ludo', 'carrom']);
 const allowedSocketMessageTypes = new Set(['text', 'image', 'video', 'file', 'voice', 'location', 'liveLocation', 'contact']);
+const allowedSocketCallTypes = new Set(['voice', 'video']);
 const allowedNotificationTypes = new Set([
   'message',
   'friend_request',
@@ -170,6 +171,43 @@ function safeSocketNotification(data, actorUsername){
     sender: actorUsername,
     type,
     text: compactString(data.text, 240)
+  };
+}
+
+function safeSocketCallSignal(data, actorUsername, maxSize = 30000){
+  if(!data || payloadSize(data) > maxSize) return null;
+  const target = compactString(data.target || data.recipient, 80);
+  const callId = compactString(data.callId, 100);
+  const callType = compactString(data.callType || data.type || 'voice', 20);
+  if(!target || !callId || target === actorUsername) return null;
+  if(!allowedSocketCallTypes.has(callType)) return null;
+  return {
+    callId,
+    sender: actorUsername,
+    target,
+    recipient: target,
+    callType
+  };
+}
+
+function safeSessionDescription(value, expectedType){
+  if(!value || typeof value !== 'object') return null;
+  const type = compactString(value.type, 20);
+  const sdp = compactString(value.sdp, 25000);
+  if(type !== expectedType || !sdp) return null;
+  return { type, sdp };
+}
+
+function safeIceCandidate(value){
+  if(!value || typeof value !== 'object') return null;
+  const candidate = compactString(value.candidate, 4000);
+  if(!candidate) return null;
+  return {
+    candidate,
+    sdpMid: compactString(value.sdpMid, 40),
+    sdpMLineIndex: Number.isFinite(Number(value.sdpMLineIndex))
+      ? Number(value.sdpMLineIndex)
+      : 0
   };
 }
 
@@ -563,6 +601,69 @@ io.on('connection', (socket) => {
       receiver: reader,
       messageId
     });
+  });
+
+  socket.on('call_invite', (data) => {
+    const safeData = safeSocketCallSignal(data, socket.authUser.username, 5000);
+    if(!safeData) return;
+    io.emit('incoming_call', {
+      ...safeData,
+      startedAt: new Date().toISOString()
+    });
+  });
+
+  socket.on('call_offer', (data) => {
+    const safeData = safeSocketCallSignal(data, socket.authUser.username);
+    const offer = safeSessionDescription(data && data.offer, 'offer');
+    if(!safeData || !offer) return;
+    io.emit('call_offer', {
+      ...safeData,
+      offer
+    });
+  });
+
+  socket.on('call_answer', (data) => {
+    const safeData = safeSocketCallSignal(data, socket.authUser.username, 5000);
+    if(!safeData) return;
+    io.emit('call_answered', {
+      ...safeData,
+      answeredAt: new Date().toISOString()
+    });
+  });
+
+  socket.on('call_answer_sdp', (data) => {
+    const safeData = safeSocketCallSignal(data, socket.authUser.username);
+    const answer = safeSessionDescription(data && data.answer, 'answer');
+    if(!safeData || !answer) return;
+    io.emit('call_answer_sdp', {
+      ...safeData,
+      answer
+    });
+  });
+
+  socket.on('call_ice_candidate', (data) => {
+    const safeData = safeSocketCallSignal(data, socket.authUser.username, 8000);
+    const candidate = safeIceCandidate(data && data.candidate);
+    if(!safeData || !candidate) return;
+    io.emit('call_ice_candidate', {
+      ...safeData,
+      candidate
+    });
+  });
+
+  socket.on('call_reject', (data) => {
+    const safeData = safeSocketCallSignal(data, socket.authUser.username, 5000);
+    if(!safeData) return;
+    io.emit('call_rejected', {
+      ...safeData,
+      reason: compactString(data && data.reason, 120)
+    });
+  });
+
+  socket.on('call_end', (data) => {
+    const safeData = safeSocketCallSignal(data, socket.authUser.username, 5000);
+    if(!safeData) return;
+    io.emit('call_ended', safeData);
   });
 
   socket.on('game_action', async (data) => {
