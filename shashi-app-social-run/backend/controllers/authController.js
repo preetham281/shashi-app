@@ -284,10 +284,11 @@ exports.getUsers = async (req, res) => {
     const current = await User.findById(req.user.id).select('username friends');
     const users = await User.find({ _id: { $ne: req.user.id } })
       .select('username phone profilePhoto online lastSeen friends followers following about bio aboutUpdatedAt privacy')
-      .sort({ online: -1, username: 1 });
+      .sort({ online: -1, username: 1 })
+      .lean();
 
     res.json(users.map((user) => {
-      const value = user.toObject();
+      const value = { ...user };
       const isFriend = current && (
         current.friends.includes(user.username) ||
         user.friends.includes(current.username)

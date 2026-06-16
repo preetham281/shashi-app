@@ -32,6 +32,12 @@ const notificationSchema = new mongoose.Schema({
     type: String,
     maxlength: 240
   },
+  clientId: {
+    type: String,
+    default: '',
+    maxlength: 80,
+    index: true
+  },
   pushSent: {
     type: Boolean,
     default: false

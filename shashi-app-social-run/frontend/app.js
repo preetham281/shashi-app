@@ -106,6 +106,11 @@ let selectedChatMessage = null;
 let selectedChatMessageElement = null;
 let messageLongPressTimer = null;
 let messageLongPressJustSelected = false;
+let currentPageId = '';
+let pageHistoryStack = [];
+let swipeBackStart = null;
+let pendingChatAttachments = [];
+let sendingPendingAttachments = false;
 const MESSAGE_LONG_PRESS_MS = 1500;
 const chatThemeOptions = [
 { id:'plain-white', name:'Plain White', background:'#ffffff' },
@@ -184,6 +189,11 @@ return fetch(url, {
 ...options,
 signal: controller.signal
 }).finally(() => clearTimeout(timeout));
+}
+
+function keepBackendWarm(){
+if(document.visibilityState !== 'visible') return;
+fetchWithTimeout(`${API_BASE_URL}/api/health`, { cache:'no-store' }, 4000).catch(() => {});
 }
 
 function authHeaders(){
@@ -2022,7 +2032,16 @@ list.innerHTML = names.length
 : '<div class="empty-state compact">No favorite contacts yet.</div>';
 }
 
-function showPage(pageId){
+function showPage(pageId, options = {}){
+const page = byId(pageId);
+if(!page) return;
+if(currentPageId && currentPageId !== pageId && !options.skipHistory){
+pageHistoryStack.push(currentPageId);
+if(pageHistoryStack.length > 30){
+pageHistoryStack = pageHistoryStack.slice(-30);
+}
+}
+currentPageId = pageId;
 document.body.classList.toggle('main-chat-mode', pageId === 'chatPage');
 document.body.classList.toggle('full-page-mode', pageId !== 'chatPage');
 document.body.classList.toggle('conversation-mode', pageId === 'conversationPage');
@@ -2035,10 +2054,7 @@ document.querySelectorAll('.page-section').forEach((page)=>{
 page.classList.add('hidden');
 });
 
-const page = byId(pageId);
-if(page){
 page.classList.remove('hidden');
-}
 
 syncNavigationSelection(pageId);
 
@@ -2053,6 +2069,117 @@ if(pageId === 'onlinePage'){
 updateFriendsPostsTopbar();
 renderFriendsPosts();
 }
+}
+
+function preferredBackPage(){
+if(currentPageId === 'userAccountPage'){
+return userAccountReturnPage || 'profilePage';
+}
+if(currentPageId === 'contactEditPage' || currentPageId === 'contactNotificationPage'){
+return 'userAccountPage';
+}
+if(currentPageId === 'chatThemePage'){
+return 'conversationPage';
+}
+if(currentPageId === 'textStoryPage'){
+return 'statusPage';
+}
+return '';
+}
+
+function goBackInApp(){
+if(currentPageId === 'chatPage') return false;
+let target = preferredBackPage();
+while(!target && pageHistoryStack.length){
+const candidate = pageHistoryStack.pop();
+if(candidate && candidate !== currentPageId && byId(candidate)){
+target = candidate;
+}
+}
+if(!target){
+target = 'chatPage';
+}
+if(!byId(target)) return false;
+if(target === 'chatPage'){
+pageHistoryStack = [];
+}
+showPage(target, { skipHistory:true });
+return true;
+}
+
+function isSwipeBackBlockedTarget(target){
+if(!(target instanceof Element)) return false;
+return Boolean(target.closest([
+'input',
+'textarea',
+'select',
+'button',
+'a',
+'label',
+'video',
+'audio',
+'iframe',
+'canvas',
+'[contenteditable="true"]',
+'[data-no-swipe-back]',
+'.message-input',
+'.emoji-picker',
+'.attachment-menu',
+'.chat-game-panel',
+'.chat-game-board',
+'.chat-game-ambient',
+'.camera-panel',
+'.story-camera-shell',
+'.text-story-editor',
+'.reel-card'
+].join(',')));
+}
+
+function setupSwipeBackNavigation(){
+const canTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+if(!canTouch) return;
+
+document.addEventListener('touchstart', (event) => {
+if(event.touches.length !== 1 || currentPageId === 'chatPage') return;
+if(isSwipeBackBlockedTarget(event.target)) return;
+const touch = event.touches[0];
+swipeBackStart = {
+x:touch.clientX,
+y:touch.clientY,
+time:Date.now(),
+cancelled:false
+};
+}, { passive:true });
+
+document.addEventListener('touchmove', (event) => {
+if(!swipeBackStart || event.touches.length !== 1) return;
+const touch = event.touches[0];
+const dx = Math.abs(touch.clientX - swipeBackStart.x);
+const dy = Math.abs(touch.clientY - swipeBackStart.y);
+if(dy > 35 && dy > dx){
+swipeBackStart.cancelled = true;
+}
+}, { passive:true });
+
+document.addEventListener('touchend', (event) => {
+if(!swipeBackStart || swipeBackStart.cancelled) {
+swipeBackStart = null;
+return;
+}
+const touch = event.changedTouches[0];
+const dx = touch.clientX - swipeBackStart.x;
+const dy = touch.clientY - swipeBackStart.y;
+const absX = Math.abs(dx);
+const absY = Math.abs(dy);
+const elapsed = Date.now() - swipeBackStart.time;
+swipeBackStart = null;
+if(absX < 82 || absX < absY * 1.6 || absY > 80 || elapsed > 900) return;
+goBackInApp();
+}, { passive:true });
+
+document.addEventListener('touchcancel', () => {
+swipeBackStart = null;
+}, { passive:true });
 }
 
 function syncNavigationSelection(pageId){
@@ -2127,6 +2254,21 @@ const nextMessages = key && messages.some((item) => messageKey(item) === key)
 return writeLocalMessages(messagesWithoutDuplicates(nextMessages, []).slice(-500));
 }
 
+function saveLocalMessagesBulk(messages){
+const items = Array.isArray(messages) ? messages : [];
+if(!items.length) return true;
+const existing = readLocalMessages();
+const prepared = items.map((message) => ({
+_id: message._id || `browser_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+...message,
+createdAt: message.createdAt || new Date().toISOString()
+}));
+const nextMessages = messagesWithoutDuplicates(existing, prepared)
+.sort((a, b) => messageTimeValue(a) - messageTimeValue(b))
+.slice(-500);
+return writeLocalMessages(nextMessages);
+}
+
 function getLocalConversation(sender, receiver){
 if(String(receiver).startsWith('group:')){
 return readLocalMessages().filter((message)=> message.receiver === receiver);
@@ -2164,6 +2306,60 @@ if(date.toDateString() === yesterday.toDateString()){
 return 'Yesterday';
 }
 return date.toLocaleDateString([], { month:'short', day:'numeric' });
+}
+
+function chatReadTimesKey(){
+return currentUser ? `shashiChatReadTimes:${currentUser.username}` : 'shashiChatReadTimes';
+}
+
+function readChatReadTimes(){
+try{
+return JSON.parse(localStorage.getItem(chatReadTimesKey()) || '{}');
+}catch(error){
+return {};
+}
+}
+
+function writeChatReadTimes(readTimes){
+localStorage.setItem(chatReadTimesKey(), JSON.stringify(readTimes || {}));
+}
+
+function unreadCountForChat(chatId){
+if(!currentUser || !chatId || chatId === currentUser.username) return 0;
+const readTimes = readChatReadTimes();
+const readAt = Number(readTimes[chatId] || 0);
+return getLocalConversation(currentUser.username, chatId).filter((message) => {
+if(message.sender === currentUser.username || message.sender === 'You') return false;
+return messageTimeValue(message) > readAt;
+}).length;
+}
+
+function markChatRead(chatId){
+if(!currentUser || !chatId) return;
+const readTimes = readChatReadTimes();
+readTimes[chatId] = Math.max(Date.now(), latestChatTimestamp(chatId));
+writeChatReadTimes(readTimes);
+}
+
+function chatListMetaHtml(chatId, lastMessage){
+const unread = unreadCountForChat(chatId);
+const lastTime = formatChatListTime(lastMessage);
+return `
+<div class="chat-meta">
+<time class="chat-last-time">${escapeHtml(lastTime)}</time>
+${unread > 0 ? `<span class="chat-unread-count">${unread > 99 ? '99+' : unread}</span>` : ''}
+</div>`;
+}
+
+function lastSeenStatusText(user){
+if(!user) return 'Offline';
+if(user.online) return 'Online now';
+const lastSeen = new Date(user.lastSeen || user.updatedAt || 0).getTime();
+if(!Number.isFinite(lastSeen) || !lastSeen) return 'Offline';
+const minutes = Math.max(0, Math.floor((Date.now() - lastSeen) / 60000));
+if(minutes < 1) return 'Online just now';
+if(minutes < 60) return `Online before ${minutes} min`;
+return 'Offline';
 }
 
 function sortByLatestChatTime(items){
@@ -2435,6 +2631,7 @@ if(chatInput){
 chatInput.disabled = !signedIn;
 chatInput.placeholder = signedIn ? 'Type message...' : 'Login or signup to chat';
 }
+updateChatActionButton();
 
 if(logoutButton){
 logoutButton.classList.toggle('hidden', !signedIn);
@@ -2628,10 +2825,6 @@ const item = createUserItem(user);
 if(usersList){
 usersList.appendChild(item);
 }
-
-if(chatUsersList){
-chatUsersList.appendChild(createChatListItem(user));
-}
 });
 
 renderChatGroups();
@@ -2659,7 +2852,7 @@ group
 chatGroupsList.innerHTML = sortedGroups.length
 ? sortedGroups.map((group)=>{
 const chatId = `group:${group._id}`;
-const lastTime = formatChatListTime(latestChatMessage(chatId));
+const lastMessage = latestChatMessage(chatId);
 return `
 <div class="chat-item group-chat-item" data-user="${escapeHtml(chatId)}" onclick="openGroupChat('${escapeHtml(group._id)}','${escapeHtml(group.name)}')">
 <div class="chat-avatar group-avatar"><i class="fa-solid fa-user-group"></i></div>
@@ -2667,7 +2860,7 @@ return `
 <h4>${escapeHtml(group.name)}</h4>
 <small>${group.members.length} members</small>
 </div>
-<time class="chat-last-time">${escapeHtml(lastTime)}</time>
+${chatListMetaHtml(chatId, lastMessage)}
 </div>
 `;
 }).join('')
@@ -2744,7 +2937,7 @@ item.innerHTML = `
 <div class="user-avatar">${avatar}</div>
 <div>
 <strong>${user.username}</strong>
-<small>${escapeHtml(user.about || user.bio || (user.online ? 'Online' : 'Offline'))}</small>
+<small>${escapeHtml(user.about || user.bio || lastSeenStatusText(user))}</small>
 </div>
 <span class="presence-dot ${user.online ? 'online' : ''}"></span>
 `;
@@ -2762,7 +2955,6 @@ const avatar = currentUser.profilePhoto
 ? `<img src="${photoUrl(currentUser.profilePhoto)}" alt="${escapeHtml(currentUser.username)}">`
 : '<span>Y</span>';
 const lastMessage = latestChatMessage(currentUser.username);
-const lastTime = formatChatListTime(lastMessage);
 
 item.innerHTML = `
 <div class="chat-avatar">${avatar}</div>
@@ -2770,7 +2962,7 @@ item.innerHTML = `
 <h4>You <span></span></h4>
 <small>Message yourself</small>
 </div>
-<time class="chat-last-time">${escapeHtml(lastTime)}</time>
+${chatListMetaHtml(currentUser.username, lastMessage)}
 `;
 
 return item;
@@ -2786,15 +2978,14 @@ const avatar = user.profilePhoto
 ? `<img src="${photoUrl(user.profilePhoto)}" alt="${escapeHtml(user.username)}">`
 : `<span>${escapeHtml(user.username.charAt(0).toUpperCase())}</span>`;
 const lastMessage = latestChatMessage(user.username);
-const lastTime = formatChatListTime(lastMessage);
 
 item.innerHTML = `
 <div class="chat-avatar">${avatar}</div>
 <div class="chat-item-main">
 <h4>${escapeHtml(user.username)} <span></span></h4>
-<small>${user.online ? 'Online now' : 'Offline'}</small>
+<small class="chat-presence-text">${escapeHtml(lastSeenStatusText(user))}</small>
 </div>
-<time class="chat-last-time">${escapeHtml(lastTime)}</time>
+${chatListMetaHtml(user.username, lastMessage)}
 `;
 
 return item;
@@ -2805,6 +2996,22 @@ document.querySelectorAll('#chatUsersList .chat-item[data-user], #chatGroupsList
 const time = item.querySelector('.chat-last-time');
 if(time){
 time.innerText = formatChatListTime(latestChatMessage(item.dataset.user));
+}
+const badge = item.querySelector('.chat-unread-count');
+const unread = unreadCountForChat(item.dataset.user);
+if(badge){
+badge.innerText = unread > 99 ? '99+' : unread;
+badge.classList.toggle('hidden', unread === 0);
+}else if(unread > 0){
+const meta = item.querySelector('.chat-meta');
+if(meta){
+meta.insertAdjacentHTML('beforeend', `<span class="chat-unread-count">${unread > 99 ? '99+' : unread}</span>`);
+}
+}
+const presence = item.querySelector('.chat-presence-text');
+const user = appUsers.find((entry) => entry.username === item.dataset.user);
+if(presence && user){
+presence.innerText = lastSeenStatusText(user);
 }
 });
 }
@@ -3294,6 +3501,31 @@ function firebaseReady(firebase){
 return Boolean(firebase && firebase.firebaseReady && firebase.auth);
 }
 
+async function registerDevicePushToken(){
+if(!currentUser || !authToken) return;
+try{
+const firebase = await firebaseReadyPromise;
+const vapidKey = (window.SHASHI_FIREBASE_VAPID_KEY || '').trim();
+if(!firebase || !firebase.requestShashiPushToken || !vapidKey) return;
+const token = await firebase.requestShashiPushToken(vapidKey);
+if(!token) return;
+await fetch(`${API_BASE_URL}/api/notifications/push/register`, {
+method:'POST',
+headers:{ 'Content-Type':'application/json', ...authHeaders() },
+body:JSON.stringify({ username:currentUser.username, token })
+});
+if(firebase.listenForShashiPushMessages){
+firebase.listenForShashiPushMessages((payload) => {
+const body = payload && payload.notification ? payload.notification.body : 'New notification';
+setStatus(body, true);
+loadNotifications();
+});
+}
+}catch(error){
+console.warn('Push notification registration skipped:', error.message);
+}
+}
+
 async function handleAuth(event){
 event.preventDefault();
 
@@ -3365,6 +3597,7 @@ const panel = byId('authCodePanel');
 if(panel) panel.classList.add('hidden');
 updateAuthView();
 registerPresence();
+registerDevicePushToken();
 loadCurrentUser();
 loadUsers();
 loadMessages();
@@ -3608,16 +3841,42 @@ socket.emit('register_user', currentUser._id);
 }
 }
 
+function renderConversationMessageList(messages, emptyText){
+const container = byId('chatMessages');
+if(!container) return;
+container.innerHTML = '';
+currentConversationMessages = messages;
+if(!messages.length){
+renderEmptyMessage(emptyText);
+return;
+}
+messages.forEach((message)=>{
+const type =
+message.sender === currentUser.username || message.sender === 'You'
+? 'sent'
+: 'received';
+appendMessage(message, type);
+});
+}
+
 async function loadMessages(){
 if(!currentUser){
 renderEmptyMessage('Login to load your saved chat.');
 return;
 }
 
+const localMessages = getLocalConversation(currentUser.username, currentChatUser);
+if(localMessages.length > 0){
+markChatRead(currentChatUser);
+renderConversationMessageList(localMessages, `No messages with ${chatDisplayName(currentChatUser)} yet.`);
+refreshChatListTimes();
+}
+
 try{
 const params = new URLSearchParams({
 sender: currentUser.username,
-receiver: currentChatUser
+receiver: currentChatUser,
+limit: '150'
 });
 const response = await fetchWithTimeout(`${API_BASE_URL}/api/messages?${params.toString()}`, {
 headers: authHeaders()
@@ -3648,7 +3907,8 @@ const oldDemoMessages =
 return betweenCurrentChat || oldDemoMessages;
 });
 currentConversationMessages = visibleMessages;
-visibleMessages.forEach((message) => saveLocalMessage(message));
+saveLocalMessagesBulk(visibleMessages);
+markChatRead(currentChatUser);
 renderUsers();
 
 if(visibleMessages.length === 0){
@@ -3656,31 +3916,16 @@ renderEmptyMessage(`No messages with ${chatDisplayName(currentChatUser)} yet.`);
 return;
 }
 
-visibleMessages.forEach((message)=>{
-const type =
-message.sender === currentUser.username || message.sender === 'You'
-? 'sent'
-: 'received';
-
-appendMessage(message, type);
-});
+renderConversationMessageList(visibleMessages, `No messages with ${chatDisplayName(currentChatUser)} yet.`);
 
 setStatus('Backend online', true);
 }catch(error){
 console.error(error);
 setStatus('Backend offline', false);
-const localMessages = getLocalConversation(currentUser.username, currentChatUser);
-const container = byId('chatMessages');
-container.innerHTML = '';
 if(localMessages.length > 0){
-currentConversationMessages = localMessages;
-localMessages.forEach((message)=>{
-const type =
-message.sender === currentUser.username || message.sender === 'You'
-? 'sent'
-: 'received';
-appendMessage(message, type);
-});
+markChatRead(currentChatUser);
+renderConversationMessageList(localMessages, `No messages with ${chatDisplayName(currentChatUser)} yet.`);
+refreshChatListTimes();
 return;
 }
 renderEmptyMessage('Could not load messages. Start backend and MongoDB.');
@@ -3689,7 +3934,9 @@ renderEmptyMessage('Could not load messages. Start backend and MongoDB.');
 
 function openChat(user){
 clearMessageSelection();
+clearPendingChatAttachments();
 currentChatUser = user;
+markChatRead(user);
 resumeChatGameForCurrentChat(false);
 const displayName = chatDisplayName(user);
 byId('chatUser').innerText = displayName;
@@ -3710,6 +3957,7 @@ avatar.innerHTML = `<span>${escapeHtml(displayName.charAt(0).toUpperCase())}</sp
 }
 }
 
+refreshChatListTimes();
 document.querySelectorAll('.chat-item').forEach((item)=>{
 item.classList.toggle('selected', item.dataset.user === user);
 });
@@ -3737,7 +3985,146 @@ setStatus('Saved offline. Backend slow.', false);
 });
 }
 
-function sendChat(){
+function pendingAttachmentIcon(messageType){
+if(messageType === 'image') return 'image';
+if(messageType === 'video') return 'video';
+if(messageType === 'voice') return 'microphone';
+return 'file-lines';
+}
+
+function renderPendingChatAttachments(){
+const preview = byId('chatAttachmentPreview');
+const wrapper = preview ? preview.closest('.message-input') : null;
+document.body.classList.toggle('chat-has-pending-attachment', pendingChatAttachments.length > 0);
+if(wrapper){
+wrapper.classList.toggle('has-pending-attachment', pendingChatAttachments.length > 0);
+}
+if(!preview) return;
+if(!pendingChatAttachments.length){
+preview.classList.add('hidden');
+preview.innerHTML = '';
+return;
+}
+
+preview.classList.remove('hidden');
+preview.innerHTML = pendingChatAttachments.map((item, index) => {
+const name = escapeHtml(item.fileName || 'Attachment');
+const typeLabel = item.messageType === 'file' ? 'Document ready to send' : `${item.messageType} ready to send`;
+let thumb = `<i class="fa-solid fa-${pendingAttachmentIcon(item.messageType)}"></i>`;
+if(item.messageType === 'image'){
+thumb = `<img src="${item.previewUrl}" alt="${name}">`;
+}else if(item.messageType === 'video'){
+thumb = `<video src="${item.previewUrl}" muted playsinline></video>`;
+}
+return `
+<div class="pending-attachment-card">
+<div class="pending-attachment-thumb">${thumb}</div>
+<div class="pending-attachment-info">
+<strong>${name}</strong>
+<small>${escapeHtml(typeLabel)}</small>
+</div>
+<button type="button" class="pending-attachment-remove" onclick="removePendingChatAttachment(${index})" title="Remove">
+<i class="fa-solid fa-xmark"></i>
+</button>
+</div>`;
+}).join('');
+}
+
+function clearPendingChatAttachments(){
+pendingChatAttachments.forEach((item) => {
+if(item.previewUrl){
+URL.revokeObjectURL(item.previewUrl);
+}
+});
+pendingChatAttachments = [];
+renderPendingChatAttachments();
+updateChatActionButton();
+}
+
+function removePendingChatAttachment(index){
+const item = pendingChatAttachments[index];
+if(item && item.previewUrl){
+URL.revokeObjectURL(item.previewUrl);
+}
+pendingChatAttachments = pendingChatAttachments.filter((_, itemIndex) => itemIndex !== index);
+renderPendingChatAttachments();
+updateChatActionButton();
+}
+
+async function preparePendingChatAttachments(files){
+const selectedFiles = Array.from(files || []);
+if(!selectedFiles.length) return;
+clearPendingChatAttachments();
+
+const prepared = [];
+for(const file of selectedFiles){
+await validateChatAttachmentFile(file);
+prepared.push({
+id:`pending_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+file,
+previewUrl:URL.createObjectURL(file),
+messageType:chatMessageTypeForFile(file),
+fileName:file.name,
+mediaType:file.type || 'application/octet-stream'
+});
+}
+
+pendingChatAttachments = prepared;
+renderPendingChatAttachments();
+updateChatActionButton();
+setStatus(prepared.length === 1 ? 'Attachment ready. Press send.' : `${prepared.length} attachments ready. Press send.`, true);
+}
+
+async function sendPendingChatAttachments(caption = ''){
+if(sendingPendingAttachments || !pendingChatAttachments.length) return;
+sendingPendingAttachments = true;
+setStatus('Sending attachment...', true);
+
+const attachmentsToSend = [...pendingChatAttachments];
+try{
+let sentCount = 0;
+for(const item of attachmentsToSend){
+const uploaded = await uploadChatAttachment(item.file);
+sendMediaPayload({
+text:item.messageType === 'file' ? (caption || `Document: ${item.fileName}`) : caption,
+messageType:item.messageType,
+mediaUrl:uploaded.url,
+mediaType:item.mediaType,
+fileName:item.fileName
+});
+sentCount += 1;
+if(uploaded.warning){
+setStatus('Sent using local file preview. Cloud upload was not available.', false);
+}
+}
+clearPendingChatAttachments();
+if(sentCount > 1){
+setStatus(`${sentCount} attachments sent`, true);
+}
+}catch(error){
+setStatus('Attachment was not sent.', false);
+alert(error.message);
+}finally{
+sendingPendingAttachments = false;
+}
+}
+
+function updateChatActionButton(){
+const input = byId('chatInput');
+const sendButton = byId('sendButton');
+if(!input || !sendButton) return;
+const hasText = input.value.trim().length > 0;
+const hasAttachment = pendingChatAttachments.length > 0;
+const canSend = hasText || hasAttachment;
+sendButton.classList.toggle('has-text', canSend);
+sendButton.title = hasAttachment ? 'Send attachment' : hasText ? 'Send message' : 'Audio message';
+sendButton.setAttribute('aria-label', sendButton.title);
+sendButton.innerHTML = canSend
+? '<i class="fa-solid fa-paper-plane"></i>'
+: '<i class="fa-solid fa-microphone"></i>';
+}
+
+async function sendChat(){
 if(!currentUser){
 alert('Please login or signup first.');
 return;
@@ -3747,7 +4134,19 @@ const input = byId('chatInput');
 const rawMessage = input.value.trim();
 const message = appendCalculationResult(rawMessage);
 
-if(rawMessage === '') return;
+if(pendingChatAttachments.length){
+input.value = '';
+updateCalculatorPreview();
+updateChatActionButton();
+await sendPendingChatAttachments(message);
+return;
+}
+
+if(rawMessage === ''){
+setStatus('Hold to record audio message.', false);
+updateChatActionButton();
+return;
+}
 
 const chatMessage = {
 clientId: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -3762,6 +4161,7 @@ createdAt: new Date().toISOString(),
 
 input.value = '';
 updateCalculatorPreview();
+updateChatActionButton();
 appendMessage(chatMessage, 'sent');
 saveLocalMessage(chatMessage);
 renderUsers();
@@ -3818,6 +4218,7 @@ sendChat();
 
 byId('chatInput').addEventListener('input', function(){
 updateCalculatorPreview();
+updateChatActionButton();
 if(socket && currentUser){
 socket.emit('typing', {
 sender: currentUser.username,
@@ -3850,6 +4251,7 @@ byId('chatInput').addEventListener('blur', () => {
 setTimeout(updateChatKeyboardOffset, 120);
 });
 updateChatKeyboardOffset();
+setupSwipeBackNavigation();
 
 const navButtons = document.querySelectorAll('.nav-btn');
 navButtons.forEach((btn)=>{
@@ -3879,6 +4281,9 @@ const isDirectToMe = message.receiver === currentUser.username;
 
 if(isGroupMessage || isDirectToMe){
 saveLocalMessage(message);
+if(isActiveGroupChat || (!isGroupMessage && message.sender === currentChatUser && currentPageId === 'conversationPage')){
+markChatRead(isGroupMessage ? message.receiver : message.sender);
+}
 renderUsers();
 }
 
@@ -3928,12 +4333,14 @@ return user;
 
 return {
 ...user,
-online: presence.online
+online: presence.online,
+lastSeen: presence.lastSeen || user.lastSeen
 };
 });
 
 if(currentUser && currentUser._id === presence.userId){
 currentUser.online = presence.online;
+currentUser.lastSeen = presence.lastSeen || currentUser.lastSeen;
 localStorage.setItem('shashiUser', JSON.stringify(currentUser));
 updateAuthView();
 }
@@ -3945,6 +4352,9 @@ renderUsers();
 setAuthMode('login');
 updateAuthView();
 registerPresence();
+registerDevicePushToken();
+keepBackendWarm();
+setInterval(keepBackendWarm, 240000);
 loadCurrentUser();
 loadUsers();
 showPage('chatPage');
@@ -4245,6 +4655,7 @@ function insertEmoji(emoji){
   input.value += emoji;
   input.focus();
   updateCalculatorPreview();
+  updateChatActionButton();
 }
 
 function readFileAsDataUrl(file){
@@ -4960,30 +5371,11 @@ async function handleChatMedia(event){
   input.value = '';
   if(!files.length) return;
 
-  let sentCount = 0;
-  for(const file of files){
-    try{
-      await validateChatAttachmentFile(file);
-      const uploaded = await uploadChatAttachment(file);
-      const messageType = chatMessageTypeForFile(file);
-      sendMediaPayload({
-        text: messageType === 'file' ? `Document: ${file.name}` : '',
-        messageType,
-        mediaUrl: uploaded.url,
-        mediaType: file.type || 'application/octet-stream',
-        fileName: file.name
-      });
-      sentCount += 1;
-      if(uploaded.warning){
-        setStatus('Sent using local file preview. Cloud upload was not available.', false);
-      }
-    }catch(error){
-      alert(error.message);
-    }
-  }
-
-  if(sentCount > 1){
-    setStatus(`${sentCount} attachments sent`, true);
+  try{
+    await preparePendingChatAttachments(files);
+  }catch(error){
+    clearPendingChatAttachments();
+    alert(error.message);
   }
 }
 
@@ -7154,6 +7546,8 @@ async function deleteGroupFromCard(groupId){
 
 function openGroupChat(groupId, groupName){
 currentChatUser = `group:${groupId}`;
+clearPendingChatAttachments();
+markChatRead(currentChatUser);
 clearChatGameView();
 byId('chatUser').innerText = groupName;
 const avatar = byId('chatPersonAvatar');
@@ -7161,6 +7555,7 @@ if(avatar){
 avatar.innerText = groupName.charAt(0).toUpperCase();
 }
 showPage('conversationPage');
+refreshChatListTimes();
 updateChatMenuState();
 applyChatTheme();
 loadMessages();

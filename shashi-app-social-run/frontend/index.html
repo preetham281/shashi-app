@@ -358,6 +358,8 @@
 <input id="chatGalleryInput" class="hidden" type="file" accept="image/*,video/*" multiple />
 <input id="chatDocumentInput" class="hidden" type="file" accept="*/*" multiple />
 <input id="chatCatalogueInput" class="hidden" type="file" accept="image/*,video/*,.pdf,*/*" multiple />
+<div id="chatAttachmentPreview" class="chat-attachment-preview hidden"></div>
+<div class="chat-compose-pill">
 <button type="button" class="icon-btn" onclick="toggleEmojiPicker()" title="Emoji">
 <i class="fa-regular fa-face-smile"></i>
 </button>
@@ -369,6 +371,7 @@
 <button type="button" class="icon-btn chat-camera-btn" onclick="chooseAttachment('gallery')" title="Photos and videos">
 <i class="fa-solid fa-camera"></i>
 </button>
+</div>
 <div id="attachmentMenu" class="attachment-menu hidden">
 <button type="button" onclick="chooseAttachment('document')"><i class="fa-solid fa-file-lines"></i><span>Documents</span></button>
 <button type="button" onclick="chooseAttachment('location')"><i class="fa-solid fa-location-dot"></i><span>Location</span></button>

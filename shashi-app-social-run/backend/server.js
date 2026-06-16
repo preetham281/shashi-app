@@ -170,6 +170,17 @@ function safeSocketNotification(data, actorUsername){
   };
 }
 
+function messageNotificationText(message){
+  if(message.messageType === 'image') return `${message.sender} sent you a photo`;
+  if(message.messageType === 'video') return `${message.sender} sent you a video`;
+  if(message.messageType === 'file') return `${message.sender} sent you a file`;
+  if(message.messageType === 'voice') return `${message.sender} sent you a voice message`;
+  if(message.messageType === 'location' || message.messageType === 'liveLocation') return `${message.sender} sent you a location`;
+  if(message.messageType === 'contact') return `${message.sender} sent you a contact`;
+  const text = String(message.text || '').trim();
+  return text ? `${message.sender}: ${text.slice(0, 120)}` : `${message.sender} sent you a message`;
+}
+
 function requireJsonApi(req, res, next){
   const needsBody = ['POST', 'PUT', 'PATCH'].includes(req.method);
   if(!needsBody || !req.path.startsWith('/api')){
@@ -399,14 +410,16 @@ io.on('connection', (socket) => {
     try {
       if(String(socket.authUser.id) !== String(userId)) return;
       socket.userId = userId;
+      const lastSeen = new Date();
       await User.findByIdAndUpdate(userId, {
         online: true,
-        lastSeen: new Date()
+        lastSeen
       });
 
       io.emit('presence_update', {
         userId,
-        online: true
+        online: true,
+        lastSeen
       });
     } catch(error) {
       console.log(error.message);
@@ -418,11 +431,23 @@ io.on('connection', (socket) => {
     if(!safeData) return;
     io.emit('receive_message', safeData);
     try {
+      if(safeData.sender === safeData.receiver || String(safeData.receiver).startsWith('group:')) return;
+      const clientId = compactString(safeData.clientId || '', 80);
+      const existing = clientId
+        ? await Notification.findOne({
+          recipient: safeData.receiver,
+          sender: safeData.sender,
+          type: 'message',
+          clientId
+        })
+        : null;
+      if(existing) return;
       const notification = await Notification.create({
         recipient: safeData.receiver,
         sender: safeData.sender,
         type: 'message',
-        text: `${safeData.sender} sent you a message`
+        text: messageNotificationText(safeData),
+        clientId
       });
       const push = await sendPushToUser(notification.recipient, {
         title: 'shashi',
@@ -495,14 +520,16 @@ io.on('connection', (socket) => {
 
     if(socket.userId){
       try {
+        const lastSeen = new Date();
         await User.findByIdAndUpdate(socket.userId, {
           online: false,
-          lastSeen: new Date()
+          lastSeen
         });
 
         io.emit('presence_update', {
           userId: socket.userId,
-          online: false
+          online: false,
+          lastSeen
         });
       } catch(error) {
         console.log(error.message);

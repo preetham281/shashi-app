@@ -1,6 +1,8 @@
 const Message = require('../models/Message');
 const User = require('../models/User');
 const Group = require('../models/Group');
+const Notification = require('../models/Notification');
+const { sendPushToUser } = require('../services/pushService');
 const mongoose = require('mongoose');
 const fs = require('fs/promises');
 const path = require('path');
@@ -90,6 +92,50 @@ function cleanMessage(body){
   };
 }
 
+function messageNotificationText(message){
+  if(message.messageType === 'image') return `${message.sender} sent you a photo`;
+  if(message.messageType === 'video') return `${message.sender} sent you a video`;
+  if(message.messageType === 'file') return `${message.sender} sent you a file`;
+  if(message.messageType === 'voice') return `${message.sender} sent you a voice message`;
+  if(message.messageType === 'location' || message.messageType === 'liveLocation') return `${message.sender} sent you a location`;
+  if(message.messageType === 'contact') return `${message.sender} sent you a contact`;
+  const text = String(message.text || '').trim();
+  return text ? `${message.sender}: ${text.slice(0, 120)}` : `${message.sender} sent you a message`;
+}
+
+async function notifyDirectMessage(message){
+  if(!mongoReady()) return;
+  if(!message || !message.sender || !message.receiver) return;
+  if(message.sender === message.receiver || String(message.receiver).startsWith('group:')) return;
+
+  const clientId = message.clientId || String(message._id || '');
+  const existing = clientId
+    ? await Notification.findOne({
+      recipient: message.receiver,
+      sender: message.sender,
+      type: 'message',
+      clientId
+    })
+    : null;
+  if(existing) return;
+
+  const notification = await Notification.create({
+    recipient: message.receiver,
+    sender: message.sender,
+    type: 'message',
+    text: messageNotificationText(message),
+    clientId
+  });
+  const push = await sendPushToUser(notification.recipient, {
+    title: 'shashi',
+    body: notification.text,
+    type: notification.type,
+    sender: notification.sender
+  });
+  notification.pushSent = push.sent > 0;
+  await notification.save();
+}
+
 exports.saveMessage = async (req, res) => {
 
   try {
@@ -139,6 +185,7 @@ exports.saveMessage = async (req, res) => {
     }
 
     const message = await Message.create(payload);
+    notifyDirectMessage(message).catch((error) => console.log(error.message));
 
     res.status(201).json(message);
 
@@ -156,6 +203,7 @@ exports.getMessages = async (req, res) => {
 
   try {
     const { sender, receiver } = req.query;
+    const limit = Math.min(Math.max(Number(req.query.limit) || 150, 1), 500);
     const requestingUser = await User.findById(req.user.id).select('username');
     if(!requestingUser || (sender && sender !== requestingUser.username)){
       return res.status(403).json({ message: 'You can only load your own chats' });
@@ -183,7 +231,7 @@ exports.getMessages = async (req, res) => {
           (message.sender === receiver && message.receiver === sender)
         ))
         : messages;
-      return res.json(filteredMessages);
+      return res.json(filteredMessages.slice(-limit));
     }
 
     const query = isGroupChat
@@ -197,9 +245,12 @@ exports.getMessages = async (req, res) => {
       }
       : {};
 
-    const messages = await Message.find(query).sort({ createdAt: 1 });
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
 
-    res.json(messages);
+    res.json(messages.reverse());
 
   } catch(error){
 
