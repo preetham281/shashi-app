@@ -2383,16 +2383,48 @@ body.chat-has-pending-attachment.conversation-mode .conversation-body .chat-mess
   cursor:text;
 }
 
-.message-time{
+.message-meta{
   position:static;
   float:right;
-  display:inline-block;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
   margin-left:10px;
   margin-top:5px;
+  line-height:1;
+  white-space:nowrap;
+}
+
+.message-time{
+  position:static;
+  float:none;
+  display:inline-block;
+  margin:0;
   font-size:10.5px;
   line-height:1;
   white-space:nowrap;
   opacity:.76;
+}
+
+.message-status-dots{
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+}
+
+.message-status-dots span{
+  width:4.5px;
+  height:4.5px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.92);
+  box-shadow:0 0 0 1px rgba(255,255,255,0.18);
+}
+
+.message-status-dots.status-seen span{
+  width:5px;
+  height:5px;
+  background:#38bdf8;
+  box-shadow:0 0 0 1px rgba(255,255,255,0.22);
 }
 
 .message.sent .message-time{
@@ -2426,10 +2458,13 @@ body.chat-has-pending-attachment.conversation-mode .conversation-body .chat-mess
   filter:drop-shadow(0 2px 4px rgba(15,23,42,0.10));
 }
 
-.emoji-only-message .message-time{
+.emoji-only-message .message-meta{
   float:none;
-  display:block;
+  display:inline-flex;
   margin:1px 0 0;
+}
+
+.emoji-only-message .message-time{
   font-size:10.5px;
   line-height:1;
   text-align:center;

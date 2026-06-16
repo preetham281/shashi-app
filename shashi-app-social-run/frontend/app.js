@@ -2472,14 +2472,39 @@ message.fileName || ''
 ].join('|');
 }
 
+function messageStatusRank(status){
+if(status === 'seen') return 3;
+if(status === 'delivered') return 2;
+return 1;
+}
+
+function strongestMessageStatus(firstStatus, secondStatus){
+return messageStatusRank(secondStatus) > messageStatusRank(firstStatus) ? secondStatus : firstStatus || secondStatus || 'sent';
+}
+
+function mergeUniqueList(first = [], second = []){
+return [...new Set([...(Array.isArray(first) ? first : []), ...(Array.isArray(second) ? second : [])].filter(Boolean))];
+}
+
+function mergeMessageRecord(existing, incoming){
+const merged = {
+...existing,
+...incoming
+};
+merged.status = strongestMessageStatus(existing && existing.status, incoming && incoming.status);
+merged.deliveredTo = mergeUniqueList(existing && existing.deliveredTo, incoming && incoming.deliveredTo);
+merged.readBy = mergeUniqueList(existing && existing.readBy, incoming && incoming.readBy);
+return merged;
+}
+
 function messagesWithoutDuplicates(primaryMessages, extraMessages){
-const seen = new Set();
-return [...primaryMessages, ...extraMessages].filter((message)=>{
+const seen = new Map();
+[...primaryMessages, ...extraMessages].forEach((message)=>{
 const key = messageKey(message);
-if(seen.has(key)) return false;
-seen.add(key);
-return true;
+if(!key) return;
+seen.set(key, seen.has(key) ? mergeMessageRecord(seen.get(key), message) : message);
 });
+return [...seen.values()];
 }
 
 function extractTags(text){
@@ -3917,6 +3942,7 @@ return;
 }
 
 renderConversationMessageList(visibleMessages, `No messages with ${chatDisplayName(currentChatUser)} yet.`);
+markMessagesSeen(visibleMessages);
 
 setStatus('Backend online', true);
 }catch(error){
@@ -3925,6 +3951,7 @@ setStatus('Backend offline', false);
 if(localMessages.length > 0){
 markChatRead(currentChatUser);
 renderConversationMessageList(localMessages, `No messages with ${chatDisplayName(currentChatUser)} yet.`);
+markMessagesSeen(localMessages);
 refreshChatListTimes();
 return;
 }
@@ -4155,6 +4182,7 @@ receiver: currentChatUser,
 groupId: String(currentChatUser).startsWith('group:') ? currentGroupId() : '',
 text: message,
 messageType: 'text',
+status: 'sent',
 createdAt: new Date().toISOString(),
 ...extractTags(message)
 };
@@ -4278,10 +4306,14 @@ if(!currentUser || message.sender === currentUser.username) return;
 const isGroupMessage = String(message.receiver || '').startsWith('group:');
 const isActiveGroupChat = isGroupMessage && message.receiver === currentChatUser;
 const isDirectToMe = message.receiver === currentUser.username;
+const isActiveDirectChat = !isGroupMessage && isDirectToMe && message.sender === currentChatUser && currentPageId === 'conversationPage';
 
 if(isGroupMessage || isDirectToMe){
 saveLocalMessage(message);
-if(isActiveGroupChat || (!isGroupMessage && message.sender === currentChatUser && currentPageId === 'conversationPage')){
+if(isDirectToMe){
+sendMessageDelivered(message);
+}
+if(isActiveGroupChat || isActiveDirectChat){
 markChatRead(isGroupMessage ? message.receiver : message.sender);
 }
 renderUsers();
@@ -4297,11 +4329,9 @@ return;
 if(!isDirectToMe || message.sender !== currentChatUser) return;
 
 appendMessage(message, 'received');
-socket.emit('message_seen', {
-messageId: message._id || '',
-reader: currentUser.username,
-sender: message.sender
-});
+if(currentPageId === 'conversationPage'){
+sendMessageSeen(message);
+}
 });
 
 socket.on('typing_update', (typing)=>{
@@ -4319,7 +4349,14 @@ if(currentUser) label.innerText = `You are ${currentUser.username}`;
 
 socket.on('message_seen_update', (seen)=>{
 if(currentUser && seen.sender === currentUser.username){
-setStatus(`${seen.reader} saw your message`, true);
+updateLocalMessageStatus(seen.messageId, 'seen', seen.reader || seen.receiver);
+setStatus(`${seen.reader || seen.receiver} saw your message`, true);
+}
+});
+
+socket.on('message_delivered_update', (delivered)=>{
+if(currentUser && delivered.sender === currentUser.username){
+updateLocalMessageStatus(delivered.messageId, 'delivered', delivered.receiver);
 }
 });
 
@@ -4397,6 +4434,10 @@ function renderRichMessage(message, type){
     };
   if(!data.createdAt) data.createdAt = new Date().toISOString();
   if(!data.messageType) data.messageType = 'text';
+  if(type === 'sent' && !data.status) data.status = 'sent';
+  msg.dataset.messageKey = messageKey(data);
+  if(data.clientId) msg.dataset.clientId = data.clientId;
+  if(data._id) msg.dataset.messageId = data._id;
   if(isPinnedMessage(data)) msg.classList.add('pinned-message');
   const emojiOnly = data.messageType === 'text' && isEmojiOnlyText(data.text);
   if(emojiOnly) msg.classList.add('emoji-only-message');
@@ -4428,10 +4469,16 @@ function renderRichMessage(message, type){
     bubble.innerText = data.text || '';
   }
 
+  const meta = document.createElement('span');
+  meta.className = 'message-meta';
   const time = document.createElement('span');
   time.className = 'message-time';
   time.textContent = formatMessageTime(data.createdAt);
-  bubble.appendChild(time);
+  meta.appendChild(time);
+  if(type === 'sent'){
+    meta.insertAdjacentHTML('beforeend', statusDotsHtml(messageDeliveryStatus(data)));
+  }
+  bubble.appendChild(meta);
   msg.appendChild(bubble);
   setupMessageSelection(msg, data);
   return msg;
@@ -4951,6 +4998,7 @@ function sendMediaPayload(payload){
     sender: currentUser.username,
     receiver: currentChatUser,
     groupId: String(currentChatUser).startsWith('group:') ? currentGroupId() : '',
+    status: 'sent',
     createdAt: new Date().toISOString(),
     ...payload
   };
@@ -4987,6 +5035,106 @@ function formatMessageTime(value){
   const date = new Date(value || Date.now());
   if(Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+}
+
+function messageDeliveryStatus(message){
+  if(!message) return 'sent';
+  if(message.status === 'seen' || (currentChatUser && Array.isArray(message.readBy) && message.readBy.includes(currentChatUser))){
+    return 'seen';
+  }
+  if(message.status === 'delivered' || (currentChatUser && Array.isArray(message.deliveredTo) && message.deliveredTo.includes(currentChatUser))){
+    return 'delivered';
+  }
+  return 'sent';
+}
+
+function statusDotsHtml(status){
+  const safeStatus = status === 'seen' || status === 'delivered' ? status : 'sent';
+  const label = safeStatus === 'seen' ? 'Seen' : safeStatus === 'delivered' ? 'Received' : 'Sent';
+  const dots = safeStatus === 'sent'
+    ? '<span></span>'
+    : '<span></span><span></span>';
+  return `<span class="message-status-dots status-${safeStatus}" title="${label}" aria-label="${label}">${dots}</span>`;
+}
+
+function messageMatchesId(message, messageId){
+  if(!message || !messageId) return false;
+  return String(message.clientId || '') === String(messageId) ||
+    String(message._id || '') === String(messageId) ||
+    messageKey(message) === String(messageId);
+}
+
+function updateMessageStatusIndicator(messageId, status){
+  document.querySelectorAll('.message.sent').forEach((element) => {
+    const matches = element.dataset.messageKey === String(messageId) ||
+      element.dataset.clientId === String(messageId) ||
+      element.dataset.messageId === String(messageId);
+    if(!matches) return;
+    const current = element.querySelector('.message-status-dots');
+    if(current){
+      current.outerHTML = statusDotsHtml(status);
+    }
+  });
+}
+
+function updateLocalMessageStatus(messageId, status, participant){
+  if(!messageId || !status || !currentUser) return;
+  let changed = false;
+  const updateMessage = (message) => {
+    if(!messageMatchesId(message, messageId)) return message;
+    const nextStatus = strongestMessageStatus(message.status || 'sent', status);
+    const next = { ...message, status: nextStatus };
+    if(status === 'delivered' && participant){
+      next.deliveredTo = mergeUniqueList(message.deliveredTo, [participant]);
+    }
+    if(status === 'seen' && participant){
+      next.deliveredTo = mergeUniqueList(message.deliveredTo, [participant]);
+      next.readBy = mergeUniqueList(message.readBy, [participant]);
+    }
+    changed = true;
+    return next;
+  };
+
+  const localMessages = readLocalMessages().map(updateMessage);
+  currentConversationMessages = currentConversationMessages.map(updateMessage);
+  if(changed){
+    writeLocalMessages(localMessages);
+    updateMessageStatusIndicator(messageId, status);
+  }
+}
+
+function directIncomingMessage(message){
+  return Boolean(currentUser && message && message.sender !== currentUser.username && message.sender !== 'You' && message.receiver === currentUser.username);
+}
+
+function messageReceiptId(message){
+  return message && (message.clientId || message._id || messageKey(message));
+}
+
+function sendMessageDelivered(message){
+  if(!socket || !directIncomingMessage(message)) return;
+  socket.emit('message_delivered', {
+    messageId: messageReceiptId(message),
+    sender: message.sender,
+    receiver: currentUser.username
+  });
+}
+
+function sendMessageSeen(message){
+  if(!socket || !directIncomingMessage(message)) return;
+  socket.emit('message_seen', {
+    messageId: messageReceiptId(message),
+    sender: message.sender,
+    receiver: currentUser.username
+  });
+}
+
+function markMessagesSeen(messages){
+  (messages || []).forEach((message) => {
+    if(directIncomingMessage(message)){
+      sendMessageSeen(message);
+    }
+  });
 }
 
 function pinnedMessagesKey(){
@@ -5321,6 +5469,7 @@ function forwardSelectedMessages(){
       groupId:String(cleanTarget).startsWith('group:') ? cleanTarget.replace('group:', '') : '',
       text:`Forwarded: ${text}`,
       messageType:'text',
+      status:'sent',
       createdAt:new Date().toISOString(),
       ...extractTags(`Forwarded: ${text}`)
     };

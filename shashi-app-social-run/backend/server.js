@@ -30,6 +30,7 @@ const accountRoutes = require('./routes/accountRoutes');
 const Activity = require('./models/Activity');
 const User = require('./models/User');
 const Notification = require('./models/Notification');
+const Message = require('./models/Message');
 const { sendPushToUser } = require('./services/pushService');
 
 const app = express();
@@ -136,10 +137,12 @@ function safeSocketMessage(data, actorUsername){
   if(!allowedSocketMessageTypes.has(messageType)) return null;
   return {
     ...data,
+    clientId: compactString(data.clientId, 80),
     sender,
     receiver,
     text,
     messageType,
+    status: 'sent',
     mediaUrl: compactString(data.mediaUrl, 2048),
     mediaType: compactString(data.mediaType, 120),
     fileName: path.basename(compactString(data.fileName, 180))
@@ -179,6 +182,39 @@ function messageNotificationText(message){
   if(message.messageType === 'contact') return `${message.sender} sent you a contact`;
   const text = String(message.text || '').trim();
   return text ? `${message.sender}: ${text.slice(0, 120)}` : `${message.sender} sent you a message`;
+}
+
+function messageLookup(messageId){
+  const id = compactString(messageId, 120);
+  if(!id) return null;
+  return mongoose.Types.ObjectId.isValid(id)
+    ? { $or: [{ _id: id }, { clientId: id }] }
+    : { clientId: id };
+}
+
+async function updateMessageReceipt(messageId, sender, receiver, status){
+  const lookup = messageLookup(messageId);
+  if(!lookup || !sender || !receiver || sender === receiver) return;
+  const baseQuery = {
+    ...lookup,
+    sender,
+    receiver
+  };
+  if(status === 'seen'){
+    await Message.updateOne(baseQuery, {
+      $set: { status: 'seen' },
+      $addToSet: { deliveredTo: receiver, readBy: receiver }
+    });
+    return;
+  }
+
+  await Message.updateOne({
+    ...baseQuery,
+    status: { $ne: 'seen' }
+  }, {
+    $set: { status: 'delivered' },
+    $addToSet: { deliveredTo: receiver }
+  });
 }
 
 function requireJsonApi(req, res, next){
@@ -496,12 +532,36 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('message_delivered', async (data) => {
+    if(payloadSize(data) > 2000) return;
+    const originalSender = compactString(data && data.sender, 32);
+    const receiver = socket.authUser.username;
+    const messageId = compactString(data && data.messageId, 120);
+    if(!originalSender || !messageId || originalSender === receiver) return;
+    try {
+      await updateMessageReceipt(messageId, originalSender, receiver, 'delivered');
+    } catch(error) {
+      console.log(error.message);
+    }
+    io.emit('message_delivered_update', {
+      sender: originalSender,
+      receiver,
+      messageId
+    });
+  });
+
   socket.on('message_seen', (data) => {
     if(payloadSize(data) > 2000) return;
+    const originalSender = compactString(data && data.sender, 32);
+    const reader = socket.authUser.username;
+    const messageId = compactString(data && data.messageId, 120);
+    if(!originalSender || !messageId || originalSender === reader) return;
+    updateMessageReceipt(messageId, originalSender, reader, 'seen').catch((error) => console.log(error.message));
     io.emit('message_seen_update', {
-      sender: socket.authUser.username,
-      receiver: compactString(data && data.receiver, 80),
-      messageId: compactString(data && data.messageId, 120)
+      sender: originalSender,
+      reader,
+      receiver: reader,
+      messageId
     });
   });
 
